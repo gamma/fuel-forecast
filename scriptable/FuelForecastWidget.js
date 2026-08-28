@@ -67,11 +67,17 @@ if (forecast?.forecast?.length) {
     const isToday=f.horizon===0 || f.date===forecast.date;
     const value=isToday ? f.revision_ct : f.delta_ct;
     const delta=value == null ? null : Number(value);
-    const deltaText=delta == null || !Number.isFinite(delta)
+    const roundedDelta=delta == null || !Number.isFinite(delta)
+      ? null
+      : Math.round(delta*10)/10;
+    const deltaText=roundedDelta == null
       ? "—"
-      : `${delta>=0?"+":""}${delta.toFixed(1)}ct`;
+      : `${roundedDelta>=0?"+":""}${roundedDelta.toFixed(1)}ct`;
     let c=col.addText(deltaText);
-    c.font=Font.systemFont(8); c.textColor=Color.gray();
+    c.font=Font.systemFont(8);
+    if (roundedDelta>0) c.textColor=Color.red();
+    else if (roundedDelta<0) c.textColor=Color.green();
+    else c.textColor=Color.gray();
     if (f !== forecast.forecast.slice(0,5)[forecast.forecast.slice(0,5).length - 1]) grid.addSpacer();
   }
   w.addSpacer(4);
