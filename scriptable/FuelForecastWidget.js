@@ -64,11 +64,13 @@ if (forecast?.forecast?.length) {
     const day=["So","Mo","Di","Mi","Do","Fr","Sa"][d.getDay()];
     let a=col.addText(day); a.font=Font.mediumSystemFont(9); a.textColor=Color.gray();
     let b=col.addText(Number(f.price).toFixed(3)); b.font=Font.boldSystemFont(11);
-    const revision=f.revision_ct == null ? null : Number(f.revision_ct);
-    const revisionText=revision == null || !Number.isFinite(revision)
-      ? "↻—"
-      : `↻${revision>=0?"+":""}${revision.toFixed(1)}ct`;
-    let c=col.addText(revisionText);
+    const isToday=f.horizon===0 || f.date===forecast.date;
+    const value=isToday ? f.revision_ct : f.delta_ct;
+    const delta=value == null ? null : Number(value);
+    const deltaText=delta == null || !Number.isFinite(delta)
+      ? "—"
+      : `${delta>=0?"+":""}${delta.toFixed(1)}ct`;
+    let c=col.addText(deltaText);
     c.font=Font.systemFont(8); c.textColor=Color.gray();
     if (f !== forecast.forecast.slice(0,5)[forecast.forecast.slice(0,5).length - 1]) grid.addSpacer();
   }

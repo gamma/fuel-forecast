@@ -322,7 +322,7 @@ def json_summary(r):
         f'Heute ~ {r["forecast"][0]["price"]:.3f} €/l; bester Tag {r["best_day"]} ({r["best_advantage_ct"]:+.1f} ct).'
     ]
     for x in r["forecast"]:
-        revision = x.get("revision_ct")
+        revision = x.get("revision_ct") if x.get("horizon") == 0 else None
         revision_text = f', Revision {revision:+.1f} ct' if revision is not None else ''
         lines.append(f'{x["date"]}: {x["price"]:.3f} €/l ({x["delta_ct"]:+.1f} ct{revision_text}, conf {x["confidence"]:.0%})')
     if r["news"].get("summary"):
