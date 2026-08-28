@@ -81,7 +81,7 @@ if (forecast?.forecast?.length) {
     if (f !== forecast.forecast.slice(0,5)[forecast.forecast.slice(0,5).length - 1]) grid.addSpacer();
   }
   w.addSpacer(4);
-  let foot=w.addText(`Bester Tag: ${forecast.best_day} (${forecast.best_advantage_ct>0?"+":""}${forecast.best_advantage_ct} ct) · Tankerkönig/MTS-K`);
+  let foot=w.addText(`Bester Tag: ${forecast.best_day} (${forecast.best_advantage_ct>0?"+":""}${forecast.best_advantage_ct} ct)`);
   foot.font=Font.systemFont(8); foot.textColor=Color.gray(); foot.minimumScaleFactor=0.7;
 } else {
   let t=w.addText("Noch keine Prognose. Morgendlichen Minis-Task ausführen.");
