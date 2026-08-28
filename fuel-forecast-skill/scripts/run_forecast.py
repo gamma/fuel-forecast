@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+from common import data_dir, load_json, save_json, read_jsonl, append_jsonl, add_days, clamp, median
+from market import converted_pct
+from model import (MODEL_VERSION, FEATURE_NAMES, feature_vector, is_compatible,
+                   new_model, predict, update, confidence)
+from news import process_news_files
+
+def observations_by_date(rows):
+    out = {}
+    for r in rows:
+        if r.get("date") and r.get("metrics",{}).get("cheap_reference") is not None:
+            out[r["date"]] = r
+    return out
+
+def local_trends(obs, today, bootstrap=None):
+    # Prefer real 11:50 observations. If there are too few, use tankzeit noon
+    # only for day-to-day movement; never use its absolute level as ground truth.
+    dates = sorted(d for d in obs if d < today)
+    source = obs
+    if len(dates) < 4 and bootstrap:
+        bdates = sorted(d for d in bootstrap if d < today)
+        if len(bdates) >= 2:
+            dates = bdates
+            source = bootstrap
+    if not dates:
+        return 0.0, 0.0
+    vals = [(d, source[d]["metrics"]["cheap_reference"]*100.0) for d in dates[-8:]]
+    one = vals[-1][1] - vals[-2][1] if len(vals) >= 2 else 0.0
+    if len(vals) >= 4:
+        three = (vals[-1][1] - vals[-4][1]) / 3.0
+    elif len(vals) >= 2:
+        three = (vals[-1][1] - vals[0][1]) / max(1, len(vals)-1)
+    else:
+        three = 0.0
+    return one, three
+
+def getnum(dct, *path, default=0.0):
+    cur = dct
+    for p in path:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(p)
+    try:
+        return float(cur) if cur is not None else default
+    except Exception:
+        return default
+
+def build_features(ctx, news, obs, bootstrap=None):
+    today = ctx["date"]
+    local1, local3 = local_trends(obs, today, bootstrap)
+    market = ctx.get("market", {})
+    # Market override values supplied by GPT take precedence if present.
+    ov = news.get("market_override", {}) if isinstance(news, dict) else {}
+    def mv(name, field):
+        if name in ov and ov[name].get(field) is not None:
+            return float(ov[name][field])
+        return getnum(market, name, field, default=0.0)
+    score = float(news.get("effective_score", news.get("net_score", 0.0)) or 0.0)
+    brent_eur_d1 = converted_pct(mv("brent", "d1_pct"),
+                                 mv("eurusd", "d1_pct"))
+    brent_eur_d5 = converted_pct(mv("brent", "d5_pct"),
+                                 mv("eurusd", "d5_pct"))
+    distillate_eur_d1 = converted_pct(mv("distillate", "d1_pct"),
+                                      mv("eurusd", "d1_pct"))
+    distillate_eur_d5 = converted_pct(mv("distillate", "d5_pct"),
+                                      mv("eurusd", "d5_pct"))
+    return feature_vector(
+        today,
+        local1_ct=local1,
+        local3_ct=local3,
+        brent_eur_d1=brent_eur_d1,
+        brent_eur_d5=brent_eur_d5,
+        distillate_eur_d1=distillate_eur_d1,
+        distillate_eur_d5=distillate_eur_d5,
+        eurusd_d5=mv("eurusd", "d5_pct"),
+        news_score=score,
+    )
+
+def zone_offset(obs_rows, zone):
+    diffs = []
+    for r in obs_rows[-30:]:
+        m = r.get("metrics", {})
+        reg = m.get("cheap_reference")
+        z = m.get("places",{}).get(zone,{}).get("best")
+        if reg is not None and z is not None:
+            diffs.append((z-reg)*100.0)
+    return median(diffs) if diffs else None
+
+def main():
+    d = data_dir()
+    cfg = load_json(d/"config.json")
+    ctx = load_json(d/"morning_context.json")
+    if not cfg or not ctx:
+        raise SystemExit("Run prepare_morning.py first and ensure config.json exists.")
+    # Process a new v2 draft exactly once; retain compatibility with a legacy
+    # news_signal.json when no current draft exists.
+    news = process_news_files(d, ctx) or {}
+
+    obs_rows = read_jsonl(d/"observations.jsonl")
+    obs = observations_by_date(obs_rows)
+    bootstrap_rows = read_jsonl(d/"bootstrap_noon.jsonl")
+    bootstrap = observations_by_date(bootstrap_rows)
+    models = load_json(d/"model.json", {}) or {}
+    migrated = []
+    models.setdefault("intraday_offset_ct", -0.5)
+    models.setdefault("trained_intraday_dates", [])
+    for h in range(1, cfg.get("forecast",{}).get("days",5)):
+        if not is_compatible(models.get(str(h))):
+            migrated.append(h)
+            models[str(h)] = new_model(h)
+    models["version"] = MODEL_VERSION
+    models["feature_names"] = FEATURE_NAMES
+    if migrated:
+        models["last_schema_migration"] = {
+            "to_version": MODEL_VERSION,
+            "reset_horizons": migrated,
+        }
+
+    # Reconcile same-day morning -> 11:50 offset.
+    mornings = read_jsonl(d/"morning_runs.jsonl")
+    trained_intraday = set(models.get("trained_intraday_dates", []))
+    for r in mornings:
+        dt = r.get("date")
+        if dt in trained_intraday or dt not in obs:
+            continue
+        morning_ref = r.get("morning_cheap_reference")
+        actual = obs[dt]["metrics"].get("cheap_reference")
+        if morning_ref is not None and actual is not None:
+            delta_ct = (actual-morning_ref)*100.0
+            # Before noon the current regulatory regime should make positive deltas unusual.
+            delta_ct = clamp(delta_ct, -6.0, 1.0)
+            models["intraday_offset_ct"] = 0.82*models["intraday_offset_ct"] + 0.18*delta_ct
+            trained_intraday.add(dt)
+    models["trained_intraday_dates"] = sorted(trained_intraday)[-120:]
+
+    # Reconcile pending multi-horizon forecasts.
+    pending_all = load_json(d/"pending_training.json", []) or []
+    pending = [p for p in pending_all
+               if len(p.get("x", [])) == len(FEATURE_NAMES)]
+    if len(pending) != len(pending_all):
+        models["discarded_incompatible_pending"] = len(pending_all) - len(pending)
+    still_pending = []
+    for p in pending:
+        issue, target = p["issue_date"], p["target_date"]
+        if issue in obs and target in obs:
+            actual_delta = (obs[target]["metrics"]["cheap_reference"] -
+                            obs[issue]["metrics"]["cheap_reference"]) * 100.0
+            m = models[str(p["horizon"])]
+            update(m, p["x"], actual_delta, p.get("predicted_delta_ct"))
+        else:
+            still_pending.append(p)
+
+    x = build_features(ctx, news, obs, bootstrap)
+    live_ref = ctx.get("local",{}).get("cheap_reference")
+    if live_ref is None:
+        # fallback to last observed 11:50 reference
+        past = sorted(obs)
+        if not past:
+            raise SystemExit("No live Tankerkönig price and no observations available.")
+        live_ref = obs[past[-1]]["metrics"]["cheap_reference"]
+    today_est = live_ref + models["intraday_offset_ct"]/100.0
+    # Do not predict a higher 11:50 level than the live pre-noon reference.
+    today_est = min(today_est, live_ref)
+
+    forecasts = [{
+        "date": ctx["date"],
+        "horizon": 0,
+        "price": round(today_est, 3),
+        "delta_ct": 0.0,
+        "low": round(today_est - 0.012, 3),
+        "high": round(today_est + 0.008, 3),
+        "confidence": 0.68 if ctx.get("local",{}).get("cheap_reference") is not None else 0.40,
+    }]
+
+    for h in range(1, cfg["forecast"].get("days",5)):
+        m = models[str(h)]
+        delta = predict(m, x)
+        p = today_est + delta/100.0
+        mae = max(1.2, m.get("mae_ema_ct", 3.0))
+        band = 1.35*mae/100.0
+        forecasts.append({
+            "date": add_days(ctx["date"], h),
+            "horizon": h,
+            "price": round(p,3),
+            "delta_ct": round(delta,1),
+            "low": round(p-band,3),
+            "high": round(p+band,3),
+            "confidence": round(confidence(m),2),
+        })
+        still_pending.append({
+            "id": f'{ctx["date"]}:{h}',
+            "issue_date": ctx["date"],
+            "target_date": add_days(ctx["date"], h),
+            "horizon": h,
+            "x": x,
+            "predicted_delta_ct": delta,
+        })
+
+    # Deduplicate pending by id.
+    pd = {p["id"]: p for p in still_pending}
+    save_json(d/"pending_training.json", list(pd.values())[-500:])
+
+    future = forecasts[1:]
+    best = min(future, key=lambda r:r["price"]) if future else forecasts[0]
+    advantage_ct = (best["price"] - forecasts[0]["price"])*100.0
+    fcfg = cfg["forecast"]
+    if advantage_ct <= -float(fcfg.get("wait_threshold_ct",2.0)) and best["confidence"] >= float(fcfg.get("min_confidence",0.5)):
+        action = "WAIT"
+        action_de = "WARTEN"
+    elif advantage_ct >= -float(fcfg.get("tank_threshold_ct",0.8)):
+        action = "TANK_TODAY"
+        action_de = "TANKEN HEUTE"
+    else:
+        action = "NEUTRAL"
+        action_de = "NEUTRAL"
+
+    places = {}
+    for z in cfg["region"].get("preferred_places",[]):
+        off = zone_offset(obs_rows, z)
+        if off is None:
+            live_zone = ctx.get("local",{}).get("places",{}).get(z,{}).get("best")
+            if live_zone is not None:
+                off = (live_zone - ctx["local"]["cheap_reference"])*100.0
+        places[z] = {
+            "offset_ct": round(off,1) if off is not None else None,
+            "forecast": [
+                {"date": r["date"], "price": round(r["price"] + (off or 0)/100.0,3)}
+                for r in forecasts
+            ] if off is not None else []
+        }
+
+    result = {
+        "version": 1,
+        "generated_at": ctx["generated_at"],
+        "date": ctx["date"],
+        "fuel": cfg.get("fuel","diesel"),
+        "region": cfg["region"]["name"],
+        "recommendation": action,
+        "recommendation_de": action_de,
+        "best_day": best["date"],
+        "best_advantage_ct": round(advantage_ct,1),
+        "forecast": forecasts,
+        "local_live": ctx.get("local",{}),
+        "places": places,
+        "news": {
+            "version": news.get("version", 1),
+            "net_score": news.get("net_score",0),
+            "effective_score": news.get("effective_score", news.get("net_score",0)),
+            "confidence": news.get("confidence"),
+            "summary": news.get("summary"),
+            "drivers": news.get("drivers",[])[:5],
+            "sources": news.get("sources",[])[:8],
+            "event_ids": [event.get("event_id") for event in news.get("events",[])[:8]],
+        },
+        "model": {
+            "version": MODEL_VERSION,
+            "intraday_offset_ct": round(models["intraday_offset_ct"],2),
+            "samples": {str(h): models[str(h)].get("samples",0) for h in range(1,fcfg.get("days",5))},
+            "bootstrap_samples": {str(h): models[str(h)].get("bootstrap_samples",0) for h in range(1,fcfg.get("days",5))},
+            "mae_ct": {str(h): round(models[str(h)].get("mae_ema_ct",0),2) for h in range(1,fcfg.get("days",5))},
+            "market_features": "EUR-converted split rises/falls (rockets-and-feathers)",
+        },
+        "bootstrap": {"tankzeit_noon_days": len(bootstrap), "used_for": "daily movement only; 11:50 level remains Tankerkönig ground truth"},
+        "attribution": "Live/11:50: Tankerkönig.de / MTS-K; historical movement bootstrap: tankzeit.de"
+    }
+    save_json(d/"forecast.json", result)
+    save_json(d/"model.json", models)
+    append_jsonl(d/"morning_runs.jsonl", {
+        "date": ctx["date"],
+        "generated_at": ctx["generated_at"],
+        "morning_cheap_reference": ctx.get("local",{}).get("cheap_reference"),
+        "x": x,
+        "news_effective_score": news.get("effective_score", news.get("net_score",0)),
+        "news_version": news.get("version", 1),
+        "news_event_ids": [event.get("event_id") for event in news.get("events",[])],
+        "news_draft_fingerprint": news.get("draft_fingerprint"),
+    })
+    append_jsonl(d/"forecast_history.jsonl", result)
+    print(json_summary(result))
+
+def json_summary(r):
+    lines = [
+        f'{r["recommendation_de"]} — Diesel {r["region"]}',
+        f'Heute ~ {r["forecast"][0]["price"]:.3f} €/l; bester Tag {r["best_day"]} ({r["best_advantage_ct"]:+.1f} ct).'
+    ]
+    for x in r["forecast"]:
+        lines.append(f'{x["date"]}: {x["price"]:.3f} €/l ({x["delta_ct"]:+.1f} ct, conf {x["confidence"]:.0%})')
+    if r["news"].get("summary"):
+        lines.append("News: " + str(r["news"]["summary"]))
+    return "\n".join(lines)
+
+if __name__ == "__main__":
+    main()

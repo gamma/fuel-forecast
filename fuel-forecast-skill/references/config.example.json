@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "fuel": "diesel",
+  "tankerkoenig_api_key": "PASTE_YOUR_TANKERKOENIG_API_KEY_HERE",
+  "region": {
+    "name": "Oberkrämer / Oberhavel",
+    "center": {
+      "lat": 52.69545,
+      "lng": 13.11067
+    },
+    "radius_km": 25,
+    "target_time": "11:50",
+    "preferred_places": [
+      "Germendorf",
+      "Hohen Neuendorf",
+      "Oberkrämer"
+    ]
+  },
+  "forecast": {
+    "days": 5,
+    "wait_threshold_ct": 2.0,
+    "tank_threshold_ct": 0.8,
+    "min_confidence": 0.5
+  },
+  "market": {
+    "brent_symbol": "BZ=F",
+    "distillate_symbol": "HO=F",
+    "note": "Yahoo Finance futures JSON is used as keyless numeric source; GPT must cross-check current market direction with reliable web sources."
+  },
+  "widget": {
+    "use_current_location": true,
+    "radius_km": 5,
+    "map_provider": "apple"
+  }
+}

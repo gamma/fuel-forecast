@@ -1,0 +1,16 @@
+.DS_Store
+**/__pycache__/
+*.py[cod]
+fuel-forecast-skill.zip
+
+# Local credentials and generated bootstrap cache
+memory/*
+memory/config.json
+**/bootstrap_cache/
+memory/bootstrap_noon.jsonl
+memory/bootstrap_manifest.json
+memory/bootstrap_market.jsonl
+memory/bootstrap_market_manifest.json
+memory/backtest_report.json
+memory/ablation_report.json
+memory/news_signal_draft.json
