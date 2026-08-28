@@ -7,9 +7,13 @@ from datetime import datetime
 DEFAULT_WINDOW_START = "11:40"
 DEFAULT_WINDOW_END = "12:00"
 DEFAULT_TARGET_TIME = "11:50"
+DEFAULT_NOON_RESET_WINDOW_START = "12:15"
+DEFAULT_NOON_RESET_WINDOW_END = "12:31"
+DEFAULT_NOON_RESET_TARGET_TIME = "12:20"
 DEFAULT_MAX_UPWARD_JUMP_CT = 6.0
 DEFAULT_MAX_DOWNWARD_JUMP_CT = 12.0
 DEFAULT_MINIMUM_OPEN_STATIONS = 5
+CAPTURE_TYPES = ("pre_noon", "noon_reset")
 
 
 def clock_minutes(value):
@@ -34,6 +38,15 @@ def capture_policy(cfg):
         ),
         "minimum_open_stations": int(
             capture.get("minimum_open_stations", DEFAULT_MINIMUM_OPEN_STATIONS)
+        ),
+        "noon_reset_window_start": capture.get(
+            "noon_reset_window_start", DEFAULT_NOON_RESET_WINDOW_START
+        ),
+        "noon_reset_window_end": capture.get(
+            "noon_reset_window_end", DEFAULT_NOON_RESET_WINDOW_END
+        ),
+        "noon_reset_target_time": capture.get(
+            "noon_reset_target_time", DEFAULT_NOON_RESET_TARGET_TIME
         ),
     }
 
@@ -60,8 +73,71 @@ def _reason(code, message, **details):
     return result
 
 
-def assess_capture_time(cfg, captured_at, existing_rows=None, morning_context=None):
+def capture_window(policy, capture_type):
+    if capture_type == "noon_reset":
+        return {
+            "window_start": policy["noon_reset_window_start"],
+            "window_end": policy["noon_reset_window_end"],
+            "target_time": policy["noon_reset_target_time"],
+            "minimum_open_stations": policy["minimum_open_stations"],
+        }
+    return {
+        "window_start": policy["window_start"],
+        "window_end": policy["window_end"],
+        "target_time": policy["target_time"],
+        "max_upward_jump_ct": policy["max_upward_jump_ct"],
+        "max_downward_jump_ct": policy["max_downward_jump_ct"],
+        "minimum_open_stations": policy["minimum_open_stations"],
+    }
+
+
+def detect_capture_type(cfg, captured_at):
     policy = capture_policy(cfg)
+    minute = local_minutes(captured_at)
+    for capture_type in CAPTURE_TYPES:
+        active = capture_window(policy, capture_type)
+        if (
+            clock_minutes(active["window_start"])
+            <= minute
+            < clock_minutes(active["window_end"])
+        ):
+            return capture_type
+    return None
+
+
+def assess_capture_time(cfg, captured_at, existing_rows=None,
+                        morning_context=None, capture_type="pre_noon"):
+    full_policy = capture_policy(cfg)
+    requested_type = capture_type
+    if capture_type == "auto":
+        capture_type = detect_capture_type(cfg, captured_at)
+    if capture_type not in CAPTURE_TYPES:
+        policy = capture_window(full_policy, "pre_noon")
+        reasons = [
+            _reason(
+                "outside_capture_windows",
+                "Capture time is outside both configured learning windows.",
+                local_time=captured_at.strftime("%H:%M:%S"),
+                pre_noon_window=(
+                    f"{full_policy['window_start']}–{full_policy['window_end']}"
+                ),
+                noon_reset_window=(
+                    f"{full_policy['noon_reset_window_start']}–"
+                    f"{full_policy['noon_reset_window_end']}"
+                ),
+            )
+        ]
+        return {
+            "accepted": False,
+            "capture_type": None,
+            "requested_capture_type": requested_type,
+            "captured_at": captured_at.isoformat(),
+            "policy": policy,
+            "anchors": [],
+            "reasons": reasons,
+        }
+
+    policy = capture_window(full_policy, capture_type)
     minute = local_minutes(captured_at)
     start = clock_minutes(policy["window_start"])
     end = clock_minutes(policy["window_end"])
@@ -74,11 +150,15 @@ def assess_capture_time(cfg, captured_at, existing_rows=None, morning_context=No
                 local_time=captured_at.strftime("%H:%M:%S"),
             )
         )
-    anchors = same_day_anchors(
-        existing_rows or [], morning_context, captured_at
-    ) if existing_rows or morning_context else []
+    anchors = []
+    if capture_type == "pre_noon" and (existing_rows or morning_context):
+        anchors = same_day_anchors(
+            existing_rows or [], morning_context, captured_at
+        )
     return {
         "accepted": not reasons,
+        "capture_type": capture_type,
+        "requested_capture_type": requested_type,
         "captured_at": captured_at.isoformat(),
         "policy": policy,
         "anchors": [
@@ -89,7 +169,8 @@ def assess_capture_time(cfg, captured_at, existing_rows=None, morning_context=No
     }
 
 
-def same_day_anchors(existing_rows, morning_context, captured_at):
+def same_day_anchors(existing_rows, morning_context, captured_at,
+                     existing_source="existing_observation"):
     day = captured_at.date().isoformat()
     timezone = captured_at.tzinfo
     anchors = []
@@ -103,7 +184,7 @@ def same_day_anchors(existing_rows, morning_context, captured_at):
             continue
         anchors.append(
             {
-                "source": "existing_observation",
+                "source": existing_source,
                 "timestamp": timestamp.isoformat(),
                 "reference": float(reference),
                 "minute": local_minutes(timestamp),
@@ -128,8 +209,10 @@ def same_day_anchors(existing_rows, morning_context, captured_at):
 
 
 def assess_observation(cfg, observation, captured_at, existing_rows=None,
-                       morning_context=None):
-    result = assess_capture_time(cfg, captured_at)
+                       morning_context=None, capture_type="pre_noon"):
+    result = assess_capture_time(
+        cfg, captured_at, capture_type=capture_type
+    )
     policy = result["policy"]
     reasons = result["reasons"]
     metrics = observation.get("metrics", {})
@@ -155,7 +238,14 @@ def assess_observation(cfg, observation, captured_at, existing_rows=None,
         )
 
     anchors = same_day_anchors(
-        existing_rows or [], morning_context, captured_at
+        existing_rows or [],
+        morning_context if capture_type == "pre_noon" else None,
+        captured_at,
+        existing_source=(
+            "existing_observation"
+            if capture_type == "pre_noon"
+            else "existing_noon_reset"
+        ),
     )
     result["anchors"] = [
         {key: value for key, value in anchor.items() if key != "minute"}
@@ -167,7 +257,12 @@ def assess_observation(cfg, observation, captured_at, existing_rows=None,
     start = clock_minutes(policy["window_start"])
     end = clock_minutes(policy["window_end"])
     for anchor in anchors:
-        if anchor["source"] != "existing_observation":
+        expected_source = (
+            "existing_observation"
+            if capture_type == "pre_noon"
+            else "existing_noon_reset"
+        )
+        if anchor["source"] != expected_source:
             continue
         if start <= anchor["minute"] < end:
             anchor_distance = abs(anchor["minute"] - target)
@@ -181,7 +276,7 @@ def assess_observation(cfg, observation, captured_at, existing_rows=None,
                 )
                 break
 
-    if reference is not None and anchors:
+    if capture_type == "pre_noon" and reference is not None and anchors:
         latest = anchors[-1]
         delta_ct = (float(reference) - latest["reference"]) * 100.0
         result["anchor_delta_ct"] = round(delta_ct, 1)

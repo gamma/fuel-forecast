@@ -38,6 +38,21 @@ def append_jsonl(path: Path, obj):
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n")
 
+def write_jsonl(path: Path, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+    tmp.replace(path)
+
+def replace_jsonl_row(path: Path, obj, key="date"):
+    value = obj.get(key)
+    rows = [row for row in read_jsonl(path) if row.get(key) != value]
+    rows.append(obj)
+    rows.sort(key=lambda row: str(row.get(key, "")))
+    write_jsonl(path, rows)
+
 def read_jsonl(path: Path):
     if not path.exists():
         return []

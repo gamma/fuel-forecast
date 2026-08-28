@@ -3,9 +3,9 @@ name: fuel-forecast
 description: >
   Predict whether to refuel diesel today or wait 1–4 days around Oberkrämer/Oberhavel.
   Use for Dieselpreis, Tanken, Tankerkönig, Spritpreis-Prognose, Germendorf, Hohen Neuendorf,
-  oil-price/news effects, daily fuel forecast, a scheduled morning task, or the 11:50 learning capture.
+  oil-price/news effects, daily fuel forecast, a scheduled morning task, or the 11:50/12:20 learning captures.
 metadata:
-  version: 1.7.0
+  version: 1.8.0
   compatibility: OpenMinis on iOS or Android with Python 3, network access, and browser/search; Scriptable is optional and iOS-only.
 ---
 
@@ -16,21 +16,29 @@ Operate this as a deterministic local forecasting workflow with GPT used for fre
 ## Data paths
 
 Prefer `/var/minis/mounts/FuelForecast/memory/`. If not mounted, scripts fall back to `/var/minis/memory/fuel-forecast/`.
-The `memory` subfolder is the persistent data store. On iOS, Scriptable can write the true 11:50 target into the mounted shared folder. On Android or without Scriptable, `capture_observation.py` writes the same target directly. `memory/config.json` is the single active configuration; `references/config.example.json` is only a template and must not be maintained as a second live config.
+The `memory` subfolder is the persistent data store. On iOS, Scriptable can write the true 11:50 target and the separate 12:20 noon-reset signal into the mounted shared folder. On Android or without Scriptable, `capture_observation.py` writes the same two data types directly. `memory/config.json` is the single active configuration; `references/config.example.json` is only a template and must not be maintained as a second live config.
 
-## 11:50 learning capture
+## Daily learning captures — one script, two times
 
-When asked to record the daily learning target, run once near 11:50 local time:
+Use the same executable for both scheduled invocations. To record the authoritative daily learning target, run once near 11:50 local time:
 
 ```sh
-python3 /var/minis/skills/fuel-forecast/scripts/capture_observation.py
+python3 /var/minis/skills/fuel-forecast/scripts/capture_observation.py --mode pre_noon
 ```
 
-This makes one Tankerkönig request and idempotently replaces today's row in `observations.jsonl`. Report the captured regional reference and any error briefly. On iOS, do not schedule this in addition to `FuelForecastCapture.js`; choose exactly one capture mechanism to avoid a redundant API request.
+To record the separate post-12 reset proxy, run the same script once near 12:20 local time:
 
-Both capture implementations enforce a local 11:40–12:00 acceptance window by default. They reject before making a live request when invoked outside that window. Within the window they reject too few stations, implausible values, large same-day jumps, and attempts that would replace an existing capture closer to 11:50. Rejections never modify `observations.jsonl`; they are audited in `capture_rejections.jsonl` and create `capture_recovery_request.json`.
+```sh
+python3 /var/minis/skills/fuel-forecast/scripts/capture_observation.py --mode noon_reset
+```
 
-When a capture is rejected, do not rerun the current live API and do not invent or interpolate an 11:50 price. Read [references/capture-recovery.md](references/capture-recovery.md) and research only verified timestamped historical data. Leave the day missing if no qualifying source exists.
+Each invocation makes one Tankerkönig request and idempotently replaces today's row in its own series. `pre_noon` writes `observations.jsonl`; `noon_reset` writes `noon_resets.jsonl`, `noon_shadow_forecast.json`, and `noon_shadow_history.jsonl`. With no `--mode`, the script detects the active window automatically. Report the capture type, regional reference, and any error briefly. On iOS, schedule the single `FuelForecastCapture.js` implementation twice; do not add the Python capture on top of Scriptable.
+
+Both capture implementations enforce local 11:40–12:00 and 12:15–12:31 acceptance windows by default. They reject before making a live request when invoked outside the requested window. Both types reject too few stations, implausible values, and attempts that would replace an existing capture closer to its target. Only the pre-noon target rejects large same-day jumps; a regulatory 12:00 increase is valid for `noon_reset`. Rejections never modify either learning series and are audited in `capture_rejections.jsonl`. Only a failed pre-noon capture creates `capture_recovery_request.json`.
+
+Never merge or substitute the two series. The noon reset may provide local day-to-day movement when pre-noon data has a gap, but its absolute level is not 11:50 ground truth. Its D+1 revision remains shadow-only until `noon_shadow_report.json` has enough out-of-sample evaluations to justify production use. A missing capture of either type does not invalidate the other.
+
+When a pre-noon capture is rejected, do not rerun the current live API and do not invent or interpolate an 11:50 price. Read [references/capture-recovery.md](references/capture-recovery.md) and research only verified timestamped historical data. Leave the day missing if no qualifying source exists. A rejected noon reset is simply left missing; it never triggers 11:50 recovery.
 
 ## Morning workflow
 
@@ -65,9 +73,11 @@ When a capture is rejected, do not rerun the current live API and do not invent 
 
 ## Learning behavior
 
-Do not invent training data. `FuelForecastCapture.js` on iOS or `capture_observation.py` in Minis records the actual Tankerkönig snapshot at 11:50.
+Do not invent training data. `FuelForecastCapture.js` on iOS or `capture_observation.py` in Minis records the actual Tankerkönig snapshot at 11:50 and the separately labelled reset proxy at 12:20.
 `run_forecast.py` reconciles old predictions against later observations and updates one online model per horizon.
 Model errors and sample counts are persisted in `model.json`.
+
+The reset model learns only leakage-safe pairs `noon_reset(D) -> pre_noon_observation(D+1)`. It can therefore keep learning when the 11:50 capture on day D is missing, provided the next day's target exists. Conversely, the normal model continues when a noon reset is missing. The 07:00 workflow evaluates matured shadow forecasts and writes `noon_shadow_evaluations.jsonl` plus `noon_shadow_report.json`.
 
 The system starts with conservative heuristic weights. It becomes genuinely personalized after accumulating daily observations.
 If authorized historical Tankerkönig CSV access is available, bootstrap with `import_tankerkoenig_history.py`; realtime API calls must not be abused for historical mass collection.

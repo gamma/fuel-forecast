@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from common import data_dir, load_json, save_json, read_jsonl, append_jsonl, add_days, clamp, median
+from common import (data_dir, load_json, save_json, read_jsonl, append_jsonl,
+                    add_days, clamp, median, write_jsonl)
 from market import converted_pct
 from model import (MODEL_VERSION, FEATURE_NAMES, feature_vector, is_compatible,
                    new_model, predict, update, confidence)
 from news import process_news_files
+from noon_reset import evaluate_noon_shadows, evaluation_summary
 
 def observations_by_date(rows):
     out = {}
@@ -13,16 +15,7 @@ def observations_by_date(rows):
             out[r["date"]] = r
     return out
 
-def local_trends(obs, today, bootstrap=None):
-    # Prefer real 11:50 observations. If there are too few, use tankzeit noon
-    # only for day-to-day movement; never use its absolute level as ground truth.
-    dates = sorted(d for d in obs if d < today)
-    source = obs
-    if len(dates) < 4 and bootstrap:
-        bdates = sorted(d for d in bootstrap if d < today)
-        if len(bdates) >= 2:
-            dates = bdates
-            source = bootstrap
+def _series_trends(source, dates):
     if not dates:
         return 0.0, 0.0
     vals = [(d, source[d]["metrics"]["cheap_reference"]*100.0) for d in dates[-8:]]
@@ -33,6 +26,35 @@ def local_trends(obs, today, bootstrap=None):
         three = (vals[-1][1] - vals[0][1]) / max(1, len(vals)-1)
     else:
         three = 0.0
+    return one, three
+
+
+def local_trend_selection(obs, today, bootstrap=None, noon_resets=None):
+    """Select the freshest homogeneous local series for movement features.
+
+    Absolute noon-reset levels never become 11:50 targets. Their day-to-day
+    movement is a fallback when the authoritative pre-noon series has gaps.
+    """
+    candidates = []
+    for priority, name, source in (
+        (3, "pre_noon_observations", obs),
+        (2, "noon_resets", noon_resets or {}),
+        (1, "tankzeit_bootstrap_noon", bootstrap or {}),
+    ):
+        dates = sorted(day for day in source if day < today)
+        if len(dates) >= 2:
+            candidates.append((dates[-1], priority, name, source, dates))
+    if not candidates:
+        return 0.0, 0.0, "none"
+    _, _, name, source, dates = max(candidates, key=lambda item: (item[0], item[1]))
+    one, three = _series_trends(source, dates)
+    return one, three, name
+
+
+def local_trends(obs, today, bootstrap=None, noon_resets=None):
+    one, three, _ = local_trend_selection(
+        obs, today, bootstrap=bootstrap, noon_resets=noon_resets
+    )
     return one, three
 
 def getnum(dct, *path, default=0.0):
@@ -46,9 +68,11 @@ def getnum(dct, *path, default=0.0):
     except Exception:
         return default
 
-def build_features(ctx, news, obs, bootstrap=None):
+def build_features(ctx, news, obs, bootstrap=None, noon_resets=None):
     today = ctx["date"]
-    local1, local3 = local_trends(obs, today, bootstrap)
+    local1, local3 = local_trends(
+        obs, today, bootstrap, noon_resets=noon_resets
+    )
     market = ctx.get("market", {})
     # Market override values supplied by GPT take precedence if present.
     ov = news.get("market_override", {}) if isinstance(news, dict) else {}
@@ -135,6 +159,13 @@ def main():
     obs = observations_by_date(obs_rows)
     bootstrap_rows = read_jsonl(d/"bootstrap_noon.jsonl")
     bootstrap = observations_by_date(bootstrap_rows)
+    noon_rows = read_jsonl(d/"noon_resets.jsonl")
+    noon_resets = observations_by_date(noon_rows)
+    shadow_rows = read_jsonl(d/"noon_shadow_history.jsonl")
+    shadow_evaluations = evaluate_noon_shadows(shadow_rows, obs_rows)
+    write_jsonl(d/"noon_shadow_evaluations.jsonl", shadow_evaluations)
+    shadow_report = evaluation_summary(shadow_evaluations)
+    save_json(d/"noon_shadow_report.json", shadow_report)
     models = load_json(d/"model.json", {}) or {}
     migrated = []
     models.setdefault("intraday_offset_ct", -0.5)
@@ -185,7 +216,12 @@ def main():
         else:
             still_pending.append(p)
 
-    x = build_features(ctx, news, obs, bootstrap)
+    x = build_features(
+        ctx, news, obs, bootstrap, noon_resets=noon_resets
+    )
+    _, _, local_trend_source = local_trend_selection(
+        obs, ctx["date"], bootstrap=bootstrap, noon_resets=noon_resets
+    )
     live_ref = ctx.get("local",{}).get("cheap_reference")
     if live_ref is None:
         # fallback to last observed 11:50 reference
@@ -297,6 +333,13 @@ def main():
             "bootstrap_samples": {str(h): models[str(h)].get("bootstrap_samples",0) for h in range(1,fcfg.get("days",5))},
             "mae_ct": {str(h): round(models[str(h)].get("mae_ema_ct",0),2) for h in range(1,fcfg.get("days",5))},
             "market_features": "EUR-converted split rises/falls (rockets-and-feathers)",
+            "local_trend_source": local_trend_source,
+        },
+        "noon_reset": {
+            "days": len(noon_resets),
+            "latest_date": max(noon_resets) if noon_resets else None,
+            "used_as": "separate local-movement fallback; never 11:50 truth",
+            "shadow_evaluation": shadow_report,
         },
         "bootstrap": {"tankzeit_noon_days": len(bootstrap), "used_for": "daily movement only; 11:50 level remains Tankerkönig ground truth"},
         "attribution": "Live/11:50: Tankerkönig.de / MTS-K; historical movement bootstrap: tankzeit.de"

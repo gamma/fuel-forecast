@@ -1,19 +1,31 @@
 # iOS Shortcuts setup
 
-## Required: 11:50 learning capture
+## One capture script, two daily automations
 
-This is the important Shortcut because it records the actual target used for model learning.
+Both automations run the same `FuelForecastCapture` Scriptable source.
+
+### 11:50 authoritative learning target
 
 - Shortcuts → Automation → `+`
 - Time of Day → 11:50 → Daily
 - Add Action → Scriptable → Run Script
 - Script: `FuelForecastCapture`
+- Optional Parameter: `pre_noon` (otherwise the script detects the time)
 - Set to Run Immediately
 - Do not ask before running
 
-Run `FuelForecastCapture` manually once before enabling the automation so iCloud/network permissions are already granted.
+### 12:20 separate noon reset
 
-Normal observations are accepted only from 11:40 until just before 12:00 local time. A manual test outside that window intentionally records only a rejection/recovery status and does not call Tankerkönig or change `observations.jsonl`.
+- Duplicate the 11:50 automation
+- Change Time of Day to 12:20 → Daily
+- Keep Script: `FuelForecastCapture`
+- Optional Parameter: `noon_reset` (otherwise the script detects the time)
+- Set to Run Immediately
+- Do not ask before running
+
+Run `FuelForecastCapture` manually once before enabling the automations so iCloud/network permissions are already granted. A manual run outside both windows is rejected before a network request, so use Scriptable's Run Script action at one of the scheduled times for the permission test.
+
+Pre-noon observations are accepted only from 11:40 until just before 12:00 local time. Noon resets are accepted from 12:15 until just before 12:31. They are stored separately and the reset's D+1 correction remains shadow-only.
 
 ## Morning 07:00
 

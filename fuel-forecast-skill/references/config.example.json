@@ -20,6 +20,9 @@
   "capture": {
     "window_start": "11:40",
     "window_end": "12:00",
+    "noon_reset_window_start": "12:15",
+    "noon_reset_window_end": "12:31",
+    "noon_reset_target_time": "12:20",
     "max_upward_jump_ct": 6.0,
     "max_downward_jump_ct": 12.0,
     "minimum_open_stations": 5

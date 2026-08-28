@@ -6,7 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "fuel-forecast-skill" / "scripts"))
 
-from capture_guard import assess_capture_time, assess_observation
+from capture_guard import (assess_capture_time, assess_observation,
+                           detect_capture_type)
 from capture_observation import build_observation, replace_daily_observation
 from quarantine_observation import quarantine_observation
 
@@ -80,6 +81,19 @@ def test_capture_rejects_outside_window_without_market_data():
     assert early["reasons"][0]["code"] == "outside_capture_window"
 
 
+def test_auto_capture_selects_both_daily_windows():
+    pre_noon = datetime(2026, 8, 28, 11, 50, tzinfo=timezone.utc)
+    noon_reset = datetime(2026, 8, 28, 12, 20, tzinfo=timezone.utc)
+    between = datetime(2026, 8, 28, 12, 5, tzinfo=timezone.utc)
+
+    assert detect_capture_type(guard_cfg(), pre_noon) == "pre_noon"
+    assert detect_capture_type(guard_cfg(), noon_reset) == "noon_reset"
+    assert detect_capture_type(guard_cfg(), between) is None
+    assert assess_capture_time(
+        guard_cfg(), noon_reset, capture_type="auto"
+    )["accepted"] is True
+
+
 def test_capture_rejects_large_upward_jump_from_morning_anchor():
     captured_at = datetime(2026, 8, 28, 11, 50, tzinfo=timezone.utc)
     morning = {
@@ -106,6 +120,35 @@ def test_capture_accepts_small_change_in_window():
         guard_cfg(), observation(1.75), captured_at, [], morning
     )
     assert result["accepted"] is True
+
+
+def test_noon_reset_accepts_regulatory_upward_jump():
+    captured_at = datetime(2026, 8, 28, 12, 20, tzinfo=timezone.utc)
+    result = assess_observation(
+        guard_cfg(), observation(2.05), captured_at, [], {},
+        capture_type="noon_reset",
+    )
+    assert result["accepted"] is True
+    assert result["capture_type"] == "noon_reset"
+
+
+def test_noon_reset_preserves_capture_closer_to_1220():
+    captured_at = datetime(2026, 8, 28, 12, 27, tzinfo=timezone.utc)
+    existing = [
+        {
+            "date": "2026-08-28",
+            "captured_at": "2026-08-28T12:20:00+00:00",
+            "metrics": {"cheap_reference": 2.05},
+        }
+    ]
+    result = assess_observation(
+        guard_cfg(), observation(2.04), captured_at, existing, {},
+        capture_type="noon_reset",
+    )
+    assert result["accepted"] is False
+    assert "existing_capture_closer_to_target" in [
+        item["code"] for item in result["reasons"]
+    ]
 
 
 def test_capture_preserves_existing_value_closer_to_target():
@@ -155,8 +198,11 @@ if __name__ == "__main__":
         test_capture_is_idempotent_per_day(Path(directory))
     test_capture_uses_five_cheapest_open_stations()
     test_capture_rejects_outside_window_without_market_data()
+    test_auto_capture_selects_both_daily_windows()
     test_capture_rejects_large_upward_jump_from_morning_anchor()
     test_capture_accepts_small_change_in_window()
+    test_noon_reset_accepts_regulatory_upward_jump()
+    test_noon_reset_preserves_capture_closer_to_1220()
     test_capture_preserves_existing_value_closer_to_target()
     with tempfile.TemporaryDirectory() as directory:
         test_quarantine_removes_bad_value_and_opens_recovery(Path(directory))
