@@ -2,7 +2,7 @@
 
 Serverless diesel-price forecast for Oberkrämer/Oberhavel.
 
-Current skill package: **v1.5.0**
+Current skill package: **v1.6.0**
 
 ## Platform support
 
@@ -196,6 +196,8 @@ All generated and configuration files are kept under `memory/`:
 - `memory/forecast_history.jsonl` — all old forecasts
 - `memory/pending_training.json` — forecasts waiting for future outcome
 - `memory/model.json` — learned online coefficients, error, sample counts
+
+Each forecast day also contains `revision_ct`: the change from the latest older forecast for the same target date. The Scriptable widget shows this compactly as `↻+1.2ct`; `↻—` means that no older forecast exists for that date yet.
 
 ## What is predicted?
 

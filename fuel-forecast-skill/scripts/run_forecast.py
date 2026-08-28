@@ -87,6 +87,40 @@ def zone_offset(obs_rows, zone):
             diffs.append((z-reg)*100.0)
     return median(diffs) if diffs else None
 
+
+def previous_forecasts_by_target(history_rows, before_date):
+    """Return the latest older forecast for each target calendar date."""
+    previous = {}
+    for run in history_rows:
+        issue_date = run.get("date")
+        if not issue_date or issue_date >= before_date:
+            continue
+        for item in run.get("forecast", []):
+            target_date = item.get("date")
+            price = item.get("price")
+            if not target_date or price is None:
+                continue
+            existing = previous.get(target_date)
+            if existing is None or issue_date >= existing["issue_date"]:
+                previous[target_date] = {
+                    "issue_date": issue_date,
+                    "price": float(price),
+                }
+    return previous
+
+
+def attach_forecast_revisions(forecasts, history_rows, issue_date):
+    previous = previous_forecasts_by_target(history_rows, issue_date)
+    for item in forecasts:
+        prior = previous.get(item["date"])
+        if prior is None:
+            item["revision_ct"] = None
+            item["revision_from_date"] = None
+            continue
+        item["revision_ct"] = round((item["price"] - prior["price"]) * 100.0, 1)
+        item["revision_from_date"] = prior["issue_date"]
+    return forecasts
+
 def main():
     d = data_dir()
     cfg = load_json(d/"config.json")
@@ -197,6 +231,9 @@ def main():
             "predicted_delta_ct": delta,
         })
 
+    forecast_history = read_jsonl(d/"forecast_history.jsonl")
+    attach_forecast_revisions(forecasts, forecast_history, ctx["date"])
+
     # Deduplicate pending by id.
     pd = {p["id"]: p for p in still_pending}
     save_json(d/"pending_training.json", list(pd.values())[-500:])
@@ -285,7 +322,9 @@ def json_summary(r):
         f'Heute ~ {r["forecast"][0]["price"]:.3f} €/l; bester Tag {r["best_day"]} ({r["best_advantage_ct"]:+.1f} ct).'
     ]
     for x in r["forecast"]:
-        lines.append(f'{x["date"]}: {x["price"]:.3f} €/l ({x["delta_ct"]:+.1f} ct, conf {x["confidence"]:.0%})')
+        revision = x.get("revision_ct")
+        revision_text = f', Revision {revision:+.1f} ct' if revision is not None else ''
+        lines.append(f'{x["date"]}: {x["price"]:.3f} €/l ({x["delta_ct"]:+.1f} ct{revision_text}, conf {x["confidence"]:.0%})')
     if r["news"].get("summary"):
         lines.append("News: " + str(r["news"]["summary"]))
     return "\n".join(lines)

@@ -5,7 +5,7 @@ description: >
   Use for Dieselpreis, Tanken, Tankerkönig, Spritpreis-Prognose, Germendorf, Hohen Neuendorf,
   oil-price/news effects, daily fuel forecast, a scheduled morning task, or the 11:50 learning capture.
 metadata:
-  version: 1.5.0
+  version: 1.6.0
   compatibility: OpenMinis on iOS or Android with Python 3, network access, and browser/search; Scriptable is optional and iOS-only.
 ---
 
@@ -55,6 +55,7 @@ This makes one Tankerkönig request and idempotently replaces today's row in `ob
    - Germendorf / Hohen Neuendorf when available
    - top 2–4 market/news drivers
    - confidence/model sample count
+   - append the forecast revision in ct inline when `revision_ct` is available; do not add a separate revision section
 11. Send a native notification with title `Diesel-Prognose OHV` and body containing the recommendation, best day, and expected advantage.
 
 ## Learning behavior
