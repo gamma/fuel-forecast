@@ -105,6 +105,8 @@ The capture accepts normal writes only from **11:40 inclusive until 12:00 exclus
 
 Rejected attempts leave `observations.jsonl` unchanged, append an audit record to `memory/capture_rejections.jsonl`, and create `memory/capture_recovery_request.json`. Recovery uses timestamped event-level historical data only; tankzeit noon data and current post-noon prices are never promoted automatically to 11:50 truth.
 
+The next Minis morning workflow checks a pending recovery request before model reconciliation. If no verified event-level source is available, the observation remains missing and the normal forecast continues safely.
+
 ### E. iOS: 07:00 forecast automation
 
 On iOS, Minis does not expose an in-app Scheduled Tasks screen. Create a Personal Automation in Apple's **Shortcuts** app instead:

@@ -34,25 +34,26 @@ When a capture is rejected, do not rerun the current live API and do not invent 
 
 ## Morning workflow
 
-1. Run:
+1. If `capture_recovery_request.json` exists with a status beginning with `pending`, read [references/capture-recovery.md](references/capture-recovery.md) and attempt only a verified timestamped recovery. Do not delay the morning forecast and do not fill the observation when no qualifying source is available.
+2. Run:
    ```sh
    python3 /var/minis/skills/fuel-forecast/scripts/prepare_morning.py
    ```
-2. Read `morning_context.json`.
-3. Read `references/news-schema.md`.
-4. Read the previous `news_signal.json` when present and reuse stable `event_id` values for the same underlying events. Give a new `update_id` only to a genuinely new development. Carry forward an older event only when it remains materially unresolved; mark it `ongoing` and preserve its original publication timestamp.
-5. Use Minis web/browser search to research the last 48 hours of oil, middle-distillate/diesel, refinery, sanctions, shipping, OPEC+, inventory, and EUR/USD-relevant developments. Capture exact publication timestamps with timezone.
-6. Treat news as a **residual shock**, not a second copy of price moves already visible in futures. Prioritize Reuters and primary sources.
-7. Write strict valid schema-v2 JSON to `/var/minis/mounts/FuelForecast/memory/news_signal_draft.json`.
-8. Run:
+3. Read `morning_context.json`.
+4. Read `references/news-schema.md`.
+5. Read the previous `news_signal.json` when present and reuse stable `event_id` values for the same underlying events. Give a new `update_id` only to a genuinely new development. Carry forward an older event only when it remains materially unresolved; mark it `ongoing` and preserve its original publication timestamp.
+6. Use Minis web/browser search to research the last 48 hours of oil, middle-distillate/diesel, refinery, sanctions, shipping, OPEC+, inventory, and EUR/USD-relevant developments. Capture exact publication timestamps with timezone.
+7. Treat news as a **residual shock**, not a second copy of price moves already visible in futures. Prioritize Reuters and primary sources.
+8. Write strict valid schema-v2 JSON to `/var/minis/mounts/FuelForecast/memory/news_signal_draft.json`.
+9. Run:
    ```sh
    python3 /var/minis/skills/fuel-forecast/scripts/process_news_signal.py
    ```
-9. Run:
+10. Run:
    ```sh
    python3 /var/minis/skills/fuel-forecast/scripts/run_forecast.py
    ```
-10. Read `forecast.json` and report briefly in German:
+11. Read `forecast.json` and report briefly in German:
    - TANKEN HEUTE / WARTEN / NEUTRAL
    - today + next four dates with expected pre-12:00 diesel price
    - best day and expected advantage in ct/l
@@ -60,7 +61,7 @@ When a capture is rejected, do not rerun the current live API and do not invent 
    - top 2–4 market/news drivers
    - confidence/model sample count
    - append today's forecast revision in ct inline when `revision_ct` is available; omit future-day revisions and do not add a separate revision section
-11. Send a native notification with title `Diesel-Prognose OHV` and body containing the recommendation, best day, and expected advantage.
+12. Send a native notification with title `Diesel-Prognose OHV` and body containing the recommendation, best day, and expected advantage.
 
 ## Learning behavior
 
