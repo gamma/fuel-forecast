@@ -5,7 +5,7 @@ description: >
   Use for Dieselpreis, Tanken, Tankerkönig, Spritpreis-Prognose, Germendorf, Hohen Neuendorf,
   oil-price/news effects, daily fuel forecast, a scheduled morning task, or the 11:50 learning capture.
 metadata:
-  version: "1.5.0"
+  version: 1.5.0
   compatibility: OpenMinis on iOS or Android with Python 3, network access, and browser/search; Scriptable is optional and iOS-only.
 ---
 
