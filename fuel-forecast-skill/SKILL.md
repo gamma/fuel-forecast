@@ -5,7 +5,7 @@ description: >
   Use for Dieselpreis, Tanken, Tankerkönig, Spritpreis-Prognose, Germendorf, Hohen Neuendorf,
   oil-price/news effects, daily fuel forecast, a scheduled morning task, or the 11:50 learning capture.
 metadata:
-  version: 1.6.1
+  version: 1.7.0
   compatibility: OpenMinis on iOS or Android with Python 3, network access, and browser/search; Scriptable is optional and iOS-only.
 ---
 
@@ -27,6 +27,10 @@ python3 /var/minis/skills/fuel-forecast/scripts/capture_observation.py
 ```
 
 This makes one Tankerkönig request and idempotently replaces today's row in `observations.jsonl`. Report the captured regional reference and any error briefly. On iOS, do not schedule this in addition to `FuelForecastCapture.js`; choose exactly one capture mechanism to avoid a redundant API request.
+
+Both capture implementations enforce a local 11:40–12:00 acceptance window by default. They reject before making a live request when invoked outside that window. Within the window they reject too few stations, implausible values, large same-day jumps, and attempts that would replace an existing capture closer to 11:50. Rejections never modify `observations.jsonl`; they are audited in `capture_rejections.jsonl` and create `capture_recovery_request.json`.
+
+When a capture is rejected, do not rerun the current live API and do not invent or interpolate an 11:50 price. Read [references/capture-recovery.md](references/capture-recovery.md) and research only verified timestamped historical data. Leave the day missing if no qualifying source exists.
 
 ## Morning workflow
 

@@ -4,6 +4,7 @@
   "tankerkoenig_api_key": "PASTE_YOUR_TANKERKOENIG_API_KEY_HERE",
   "region": {
     "name": "Oberkrämer / Oberhavel",
+    "timezone": "Europe/Berlin",
     "center": {
       "lat": 52.69545,
       "lng": 13.11067
@@ -15,6 +16,13 @@
       "Hohen Neuendorf",
       "Oberkrämer"
     ]
+  },
+  "capture": {
+    "window_start": "11:40",
+    "window_end": "12:00",
+    "max_upward_jump_ct": 6.0,
+    "max_downward_jump_ct": 12.0,
+    "minimum_open_stations": 5
   },
   "forecast": {
     "days": 5,

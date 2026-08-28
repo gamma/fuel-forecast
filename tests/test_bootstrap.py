@@ -1,7 +1,10 @@
 import sys
+from datetime import timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).parents[1]/"fuel-forecast-skill"/"scripts"))
 from download_tankzeit_history import uuid_path, parse_history
+from import_tankerkoenig_history import local_event_datetime
 from run_forecast import local_trends
 
 assert uuid_path("b4ed695f-2cfc-4688-8ecf-268b10cdb93e") == "b4ed695f/2cfc/4688/8ecf/268b10cdb93e"
@@ -14,4 +17,9 @@ for i,p in enumerate([2.00,2.02,2.01,1.99]):
     boot[d]={"metrics":{"cheap_reference":p}}
 one,three=local_trends({}, "2026-04-05", boot)
 assert round(one,6) == -2.0
+
+berlin = ZoneInfo("Europe/Berlin")
+event = local_event_datetime("2026-08-28T09:50:00Z", berlin)
+assert event.hour == 11 and event.minute == 50
+assert event.utcoffset() == timedelta(hours=2)
 print("OK")

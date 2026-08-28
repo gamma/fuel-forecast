@@ -13,6 +13,8 @@ This is the important Shortcut because it records the actual target used for mod
 
 Run `FuelForecastCapture` manually once before enabling the automation so iCloud/network permissions are already granted.
 
+Normal observations are accepted only from 11:40 until just before 12:00 local time. A manual test outside that window intentionally records only a rejection/recovery status and does not call Tankerkönig or change `observations.jsonl`.
+
 ## Morning 07:00
 
 On iOS, configure this in Apple's Shortcuts app; Minis' built-in Scheduled Tasks screen is Android-specific.

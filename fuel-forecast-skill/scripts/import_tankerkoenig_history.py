@@ -8,6 +8,7 @@ from __future__ import annotations
 import csv, argparse
 from pathlib import Path
 from datetime import date, timedelta, datetime, time
+from zoneinfo import ZoneInfo
 from common import data_dir, load_json, append_jsonl, haversine_km, median, quantile
 
 def daterange(a,b):
@@ -15,6 +16,12 @@ def daterange(a,b):
     while d<=b:
         yield d
         d += timedelta(days=1)
+
+def local_event_datetime(value, timezone):
+    dt=datetime.fromisoformat(value.replace("Z","+00:00"))
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone)
+    return dt.astimezone(timezone)
 
 def latest_station_file(repo: Path, end: date):
     candidates = list((repo/"stations").glob("**/*-stations.csv"))
@@ -60,11 +67,12 @@ def main():
     args=ap.parse_args()
     repo=Path(args.repo); d=data_dir(); cfg=load_json(d/"config.json")
     start=date.fromisoformat(args.since); end=date.fromisoformat(args.until)
+    timezone=ZoneInfo(cfg.get("region",{}).get("timezone","Europe/Berlin"))
+    target=time.fromisoformat(cfg.get("region",{}).get("target_time","11:50"))
     stations=station_ids(repo,cfg,end)
     current={}
     emitted=set(r.get("date") for r in __import__("common").read_jsonl(d/"observations.jsonl"))
     scan_start=start-timedelta(days=args.warmup_days)
-    target=time(11,50)
     for day in daterange(scan_start,end):
         f=repo/"prices"/f"{day.year:04d}"/f"{day.month:02d}"/f"{day.isoformat()}-prices.csv"
         if not f.exists():
@@ -76,7 +84,7 @@ def main():
                 if uid not in stations:
                     continue
                 try:
-                    dt=datetime.fromisoformat(r["date"].replace("Z","+00:00"))
+                    dt=local_event_datetime(r["date"],timezone)
                     diesel=float(r["diesel"])
                 except Exception:
                     continue
@@ -91,7 +99,8 @@ def main():
             m=metrics(current,stations,cfg["region"].get("preferred_places",[]))
             if m["cheap_reference"] is not None:
                 append_jsonl(d/"observations.jsonl",{
-                    "version":1,"date":day.isoformat(),"captured_at":f"{day.isoformat()}T11:50:00",
+                    "version":1,"date":day.isoformat(),
+                    "captured_at":datetime.combine(day,target,tzinfo=timezone).isoformat(),
                     "source":"Tankerkönig historical CSV","fuel":"diesel","metrics":m
                 })
         for dt,uid,p in events:

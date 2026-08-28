@@ -2,7 +2,7 @@
 
 Serverless diesel-price forecast for Oberkrämer/Oberhavel.
 
-Current skill package: **v1.6.1**
+Current skill package: **v1.7.0**
 
 ## Platform support
 
@@ -101,6 +101,10 @@ Create an iOS Personal Automation:
 
 This writes the actual pre-noon Tankerkönig regional snapshot to `memory/observations.jsonl`.
 
+The capture accepts normal writes only from **11:40 inclusive until 12:00 exclusive** local time. A late/early run is rejected before a Tankerkönig request. Within the window, an implausible same-day increase above 6 ct/l, decrease below -12 ct/l, too few stations, or replacement of a capture closer to 11:50 is rejected. Defaults work without changing the active config; optional overrides live only under `capture` in `memory/config.json`.
+
+Rejected attempts leave `observations.jsonl` unchanged, append an audit record to `memory/capture_rejections.jsonl`, and create `memory/capture_recovery_request.json`. Recovery uses timestamped event-level historical data only; tankzeit noon data and current post-noon prices are never promoted automatically to 11:50 truth.
+
 ### E. iOS: 07:00 forecast automation
 
 On iOS, Minis does not expose an in-app Scheduled Tasks screen. Create a Personal Automation in Apple's **Shortcuts** app instead:
@@ -186,6 +190,9 @@ The model can run without this. It starts with conservative priors and learns ev
 All generated and configuration files are kept under `memory/`:
 
 - `memory/observations.jsonl` — real 11:50 regional targets
+- `memory/capture_status.json` — latest accepted/rejected capture status
+- `memory/capture_rejections.jsonl` — rejected attempts with reasons and attempted data
+- `memory/capture_recovery_request.json` — pending or resolved request for verified historical recovery
 - `memory/market_history.jsonl` — morning market snapshots
 - `memory/bootstrap_noon.jsonl` — public tankzeit noon history, kept separate from 11:50 truth
 - `memory/bootstrap_market.jsonl` — prior-day Brent, distillate, EUR/USD, and EUR-converted historical inputs
