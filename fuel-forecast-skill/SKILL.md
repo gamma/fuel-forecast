@@ -50,7 +50,7 @@ When a pre-noon capture is rejected, do not rerun the current live API and do no
 3. Read `morning_context.json`.
 4. Read `references/news-schema.md`.
 5. Read the previous `news_signal.json` when present and reuse stable `event_id` values for the same underlying events. Give a new `update_id` only to a genuinely new development. Carry forward an older event only when it remains materially unresolved; mark it `ongoing` and preserve its original publication timestamp.
-6. Use Minis web/browser search to research the last 48 hours of oil, middle-distillate/diesel, refinery, sanctions, shipping, OPEC+, inventory, and EUR/USD-relevant developments. Capture exact publication timestamps with timezone.
+6. Use Minis web/browser search to research the last 48 hours of oil, middle-distillate/diesel, German refinery and distribution constraints, European diesel-import flows, Gulf diesel/gasoil exports and Hormuz/Red-Sea cargo logistics, refinery, sanctions, shipping, OPEC+, inventory, and EUR/USD-relevant developments. Capture exact publication timestamps with timezone.
 7. Treat news as a **residual shock**, not a second copy of price moves already visible in futures. Prioritize Reuters and primary sources.
 8. Write strict valid schema-v2 JSON to `/var/minis/mounts/FuelForecast/memory/news_signal_draft.json`.
 9. Run:
@@ -74,7 +74,7 @@ When a pre-noon capture is rejected, do not rerun the current live API and do no
 ## Learning behavior
 
 Do not invent training data. `FuelForecastCapture.js` on iOS or `capture_observation.py` in Minis records the actual Tankerkönig snapshot at 11:50 and the separately labelled reset proxy at 12:20.
-`run_forecast.py` reconciles old predictions against later observations and updates one online model per horizon.
+`run_forecast.py` reconciles old predictions against later observations and updates one online model per horizon. User-confirmed, timestamped individual station prices may be stored in `manual_station_observations.jsonl`; they never become regional targets and only calibrate that place when a matching true regional 11:50 observation exists.
 Model errors and sample counts are persisted in `model.json`.
 
 The reset model learns only leakage-safe pairs `noon_reset(D) -> pre_noon_observation(D+1)`. It can therefore keep learning when the 11:50 capture on day D is missing, provided the next day's target exists. Conversely, the normal model continues when a noon reset is missing. The 07:00 workflow evaluates matured shadow forecasts and writes `noon_shadow_evaluations.jsonl` plus `noon_shadow_report.json`.
@@ -82,7 +82,7 @@ The reset model learns only leakage-safe pairs `noon_reset(D) -> pre_noon_observ
 The system starts with conservative heuristic weights. It becomes genuinely personalized after accumulating daily observations.
 If authorized historical Tankerkönig CSV access is available, bootstrap with `import_tankerkoenig_history.py`; realtime API calls must not be abused for historical mass collection.
 
-Model version 2 converts market inputs to EUR and uses separate cost-rise and cost-fall features for each forecast horizon. This is the rockets-and-feathers prior: upward pass-through starts faster, while downward pass-through is allowed to unfold over more days. Historical tankzeit calibration is discounted and confidence remains capped until real 11:50 samples accumulate.
+The model keeps residual news in three channels: domestic German supply/distribution, European diesel-import availability (including Gulf-origin cargoes and their shipping route), and broad crude/global shipping. European import shocks receive the largest initial diesel-specific prior, while later real 11:50 observations adapt all weights. Do not double count moves already visible in EUR-adjusted distillate futures.
 
 ## Historical bootstrap
 

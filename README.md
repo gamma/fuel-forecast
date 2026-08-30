@@ -217,6 +217,7 @@ All generated and configuration files are kept under `memory/`:
 - `memory/forecast_history.jsonl` — all old forecasts
 - `memory/pending_training.json` — forecasts waiting for future outcome
 - `memory/model.json` — learned online coefficients, error, sample counts
+- `memory/manual_station_observations.jsonl` — user-confirmed individual station prices; used only to calibrate that place when a matching regional 11:50 target also exists, never as a regional model target
 
 Each forecast day also contains `revision_ct`: the change from the latest older forecast for the same target date. To keep the Scriptable widget compact, only today's otherwise useless `+0.0ct` line is replaced by this revision. Future days continue to show their expected difference from today; no additional row is added. A dash means that no older forecast exists for today yet.
 

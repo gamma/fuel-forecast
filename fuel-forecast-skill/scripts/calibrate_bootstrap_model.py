@@ -97,7 +97,9 @@ def historical_features(day, fuel, market, mode="eur_market_asymmetric"):
             market_value(row, "eurusd_usd_per_eur", "d5_pct")
             if mode == "eur_market_asymmetric" else 0.0
         ),
-        news_score=0.0,
+        news_domestic_supply=0.0,
+        news_european_imports=0.0,
+        news_global_crude_shipping=0.0,
     )
     if mode.endswith("_symmetric"):
         return _collapse_market_asymmetry(features)

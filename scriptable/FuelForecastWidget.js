@@ -13,6 +13,16 @@ if (!fm.fileExists(configPath)) throw new Error("FuelForecast/memory/config.json
 const cfg=JSON.parse(fm.readString(configPath));
 const forecast=fm.fileExists(forecastPath) ? JSON.parse(fm.readString(forecastPath)) : null;
 
+const now = new Date();
+const todayKey = new DateFormatter();
+todayKey.dateFormat = "yyyy-MM-dd";
+const isAfternoon = now.getHours() >= 12;
+// After the 12:00 price reset, today's pre-noon recommendation is no longer
+// the useful widget anchor. Lead with the next available calendar-day forecast.
+const forecastRows = (forecast?.forecast || []).filter(f =>
+  !isAfternoon || f.date > todayKey.string(now)
+);
+
 let location;
 if (cfg.widget?.use_current_location !== false) {
   Location.setAccuracyToKilometer();
@@ -56,9 +66,9 @@ if (live) {
 }
 
 w.addSpacer(6);
-if (forecast?.forecast?.length) {
+if (forecastRows.length) {
   const grid=w.addStack(); grid.layoutHorizontally();
-  for (const f of forecast.forecast.slice(0,5)) {
+  for (const f of forecastRows.slice(0,5)) {
     const col=grid.addStack(); col.layoutVertically(); col.centerAlignContent();
     const d=new Date(f.date+"T12:00:00");
     const day=["So","Mo","Di","Mi","Do","Fr","Sa"][d.getDay()];
@@ -78,10 +88,11 @@ if (forecast?.forecast?.length) {
     if (roundedDelta>0) c.textColor=Color.red();
     else if (roundedDelta<0) c.textColor=Color.green();
     else c.textColor=Color.gray();
-    if (f !== forecast.forecast.slice(0,5)[forecast.forecast.slice(0,5).length - 1]) grid.addSpacer();
+    const visibleRows=forecastRows.slice(0,5);
+    if (f !== visibleRows[visibleRows.length - 1]) grid.addSpacer();
   }
   w.addSpacer(4);
-  let foot=w.addText(`Bester Tag: ${forecast.best_day} (${forecast.best_advantage_ct>0?"+":""}${forecast.best_advantage_ct} ct)`);
+  let foot=w.addText(`${isAfternoon ? "Ab morgen · " : ""}Bester Tag: ${forecast.best_day} (${forecast.best_advantage_ct>0?"+":""}${forecast.best_advantage_ct} ct)`);
   foot.font=Font.systemFont(8); foot.textColor=Color.gray(); foot.minimumScaleFactor=0.7;
 } else {
   let t=w.addText("Noch keine Prognose. Morgendlichen Minis-Task ausführen.");

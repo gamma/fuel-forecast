@@ -68,6 +68,38 @@ def getnum(dct, *path, default=0.0):
     except Exception:
         return default
 
+def news_channel_scores(news):
+    """Split residual news by transmission path to German retail diesel.
+
+    Each event is already age-, novelty-, confidence-, and priced-adjusted by
+    news.py. Domestic supply is closest to German rack/retail pricing;
+    European imports includes Gulf-origin cargo availability and shipping.
+    """
+    channels = {
+        "domestic_supply": 0.0,
+        "european_imports": 0.0,
+        "global_crude_shipping": 0.0,
+    }
+    categories = {
+        "domestic_supply": {"domestic_refinery", "domestic_distribution", "refinery_outage"},
+        "european_imports": {"european_diesel_imports", "gulf_distillate_shipping", "distillate_supply", "sanctions_export_policy"},
+        "global_crude_shipping": {"opec_policy", "geopolitics_shipping", "inventory_demand", "macro_fx", "market_commentary", "other"},
+    }
+    for event in news.get("events", []) if isinstance(news, dict) else []:
+        category = str(event.get("category") or "other")
+        score = float(event.get("effective_impact", 0.0) or 0.0)
+        for channel, values in categories.items():
+            if category in values:
+                channels[channel] += score
+                break
+    # Compatibility with legacy v1 signals lacking event-level detail.
+    if not any(channels.values()):
+        channels["global_crude_shipping"] = float(
+            news.get("effective_score", news.get("net_score", 0.0)) or 0.0
+        )
+    return {name: clamp(value, -3.0, 3.0) for name, value in channels.items()}
+
+
 def build_features(ctx, news, obs, bootstrap=None, noon_resets=None):
     today = ctx["date"]
     local1, local3 = local_trends(
@@ -89,6 +121,7 @@ def build_features(ctx, news, obs, bootstrap=None, noon_resets=None):
                                       mv("eurusd", "d1_pct"))
     distillate_eur_d5 = converted_pct(mv("distillate", "d5_pct"),
                                       mv("eurusd", "d5_pct"))
+    channels = news_channel_scores(news)
     return feature_vector(
         today,
         local1_ct=local1,
@@ -98,8 +131,47 @@ def build_features(ctx, news, obs, bootstrap=None, noon_resets=None):
         distillate_eur_d1=distillate_eur_d1,
         distillate_eur_d5=distillate_eur_d5,
         eurusd_d5=mv("eurusd", "d5_pct"),
-        news_score=score,
+        news_domestic_supply=channels["domestic_supply"],
+        news_european_imports=channels["european_imports"],
+        news_global_crude_shipping=channels["global_crude_shipping"],
     )
+
+def manual_zone_offset(manual_rows, obs, zone):
+    """Return a local station offset only for date-matched regional targets.
+
+    A user-confirmed single-station price never becomes a regional training
+    target. It can calibrate its own place only when the same date has a true
+    11:50 regional reference.
+    """
+    values = []
+    usable = []
+    for row in manual_rows:
+        station = row.get("station", {}) if isinstance(row, dict) else {}
+        if str(station.get("place", "")).casefold() != str(zone).casefold():
+            continue
+        if row.get("training_status") != "excluded_single_station_not_regional_reference":
+            continue
+        day = row.get("date")
+        target = obs.get(day, {}).get("metrics", {}).get("cheap_reference")
+        price = row.get("price_eur_l")
+        try:
+            if target is None or price is None:
+                continue
+            values.append((float(price) - float(target)) * 100.0)
+            usable.append(day)
+        except (TypeError, ValueError):
+            continue
+    return (median(values) if values else None), sorted(usable)
+
+
+def manual_zone_latest(manual_rows, zone):
+    rows = [
+        row for row in manual_rows
+        if isinstance(row, dict)
+        and str(row.get("station", {}).get("place", "")).casefold() == str(zone).casefold()
+    ]
+    return max(rows, key=lambda row: (row.get("date", ""), row.get("captured_at_local", "")), default=None)
+
 
 def zone_offset(obs_rows, zone):
     diffs = []
@@ -156,6 +228,7 @@ def main():
     news = process_news_files(d, ctx) or {}
 
     obs_rows = read_jsonl(d/"observations.jsonl")
+    manual_station_rows = read_jsonl(d/"manual_station_observations.jsonl")
     obs = observations_by_date(obs_rows)
     bootstrap_rows = read_jsonl(d/"bootstrap_noon.jsonl")
     bootstrap = observations_by_date(bootstrap_rows)
@@ -289,12 +362,32 @@ def main():
         action_de = "NEUTRAL"
 
     places = {}
+    manual_place_history = {}
     for z in cfg["region"].get("preferred_places",[]):
         off = zone_offset(obs_rows, z)
+        manual_off, matched_dates = manual_zone_offset(manual_station_rows, obs, z)
+        latest_manual = manual_zone_latest(manual_station_rows, z)
+        # Direct matched 11:50 regional truth takes precedence; otherwise keep
+        # the model's regional/local offset untouched and expose the manual row.
+        if manual_off is not None:
+            off = manual_off
         if off is None:
             live_zone = ctx.get("local",{}).get("places",{}).get(z,{}).get("best")
             if live_zone is not None:
                 off = (live_zone - ctx["local"]["cheap_reference"])*100.0
+        manual_place_history[z] = {
+            "count": sum(
+                1 for row in manual_station_rows
+                if str(row.get("station", {}).get("place", "")).casefold() == str(z).casefold()
+            ),
+            "matched_regional_dates": matched_dates,
+            "latest": latest_manual,
+            "used_for_offset": manual_off is not None,
+            "note": (
+                "Single-station entries are never regional model targets; they "
+                "adjust this place only when matched to a true regional 11:50 reference."
+            ),
+        }
         places[z] = {
             "offset_ct": round(off,1) if off is not None else None,
             "forecast": [
@@ -316,8 +409,10 @@ def main():
         "forecast": forecasts,
         "local_live": ctx.get("local",{}),
         "places": places,
+        "manual_station_history": manual_place_history,
         "news": {
             "version": news.get("version", 1),
+            "channels": news_channel_scores(news),
             "net_score": news.get("net_score",0),
             "effective_score": news.get("effective_score", news.get("net_score",0)),
             "confidence": news.get("confidence"),

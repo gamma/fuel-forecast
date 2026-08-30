@@ -7,7 +7,8 @@ Also carry forward a previously recorded event only when it remains materially
 unresolved; keep its original `published_at` and mark it `ongoing`.
 
 Prioritize Reuters/major wires and primary OPEC, IEA, EIA, government, sanctions,
-inventory, refinery, pipeline, shipping, and export-policy sources. News is a
+inventory, refinery, pipeline, shipping, export-policy, European import-flow and
+Middle-East diesel/gasoil cargo sources. News is a
 residual shock: estimate how much is not already visible in Brent/distillate
 futures. Do not score ordinary market commentary as a new causal event.
 
@@ -61,9 +62,32 @@ normally `memory/news_signal_draft.json`:
 - `confidence`, `novelty`, `already_priced`: values from 0 to 1.
 - `persistence_hours`: expected event half-life, normally 12–168 hours.
 
-Suggested categories: `opec_policy`, `sanctions_export_policy`,
-`geopolitics_shipping`, `refinery_outage`, `distillate_supply`,
-`inventory_demand`, `macro_fx`, `market_commentary`, `other`.
+Suggested categories: `domestic_refinery`, `domestic_distribution`,
+`european_diesel_imports`, `gulf_distillate_shipping`, `opec_policy`,
+`sanctions_export_policy`, `geopolitics_shipping`, `refinery_outage`,
+`distillate_supply`, `inventory_demand`, `macro_fx`, `market_commentary`,
+`other`.
+
+## Transmission-path classification
+
+Assign every event to the most direct German-diesel transmission path:
+
+- `domestic_refinery` / `domestic_distribution`: German refinery availability,
+  Rhine/rail/terminal disruptions, strikes, or regional logistics. Use only for
+  an identifiable domestic effect.
+- `european_diesel_imports`: cargo availability, European diesel/gasoil import
+  flows, EU/UK/Northwest-European stocks, exports from the Middle East, India,
+  Turkey, the US or Russia, and sanctions that directly redirect diesel supply.
+- `gulf_distillate_shipping`: Strait of Hormuz, Gulf port/loadings or tanker
+  disruptions **when they impede diesel/gasoil cargoes** destined for Europe.
+  Do not use this merely for an oil headline.
+- `geopolitics_shipping` / `opec_policy`: broad crude or shipping news without
+  a demonstrated distillate-import connection.
+
+The model keeps these three channels separate: domestic supply, European
+imports (the highest initial diesel-specific weight), and global crude/shipping.
+Always estimate the residual effect after checking the EUR-adjusted distillate
+futures; do not count the same shock twice.
 
 The deterministic processor applies full age weight at 0–24 hours, decays it to
 55 percent during 24–48 hours, retains older events only when `ongoing` or

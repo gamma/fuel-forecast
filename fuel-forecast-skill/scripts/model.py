@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from common import clamp
 
-MODEL_VERSION = 2
+MODEL_VERSION = 3
 
 FEATURE_NAMES = [
     "bias",
@@ -18,7 +18,9 @@ FEATURE_NAMES = [
     "distillate_eur_5d_up",
     "distillate_eur_5d_down",
     "eurusd_5d",
-    "news",
+    "news_domestic_supply",
+    "news_european_imports",
+    "news_global_crude_shipping",
     "weekday_sin",
     "weekday_cos",
 ]
@@ -42,7 +44,9 @@ def initial_weights(h):
         4.0*up_scale,              # distillate EUR 5d rise
         4.0*down_scale,            # distillate EUR 5d fall (slower)
         0.0,                       # residual FX lag; EUR already converted
-        2.2*local_scale,           # residual news shock
+        2.6*local_scale,           # domestic/nearby refinery & distribution shock
+        3.4*local_scale,           # European diesel-import availability/logistics
+        1.4*local_scale,           # global crude/geopolitical residual shock
         0.15, 0.15,                # weak weekday seasonality
     ]
 
@@ -56,7 +60,9 @@ def split_change(value, scale):
 def feature_vector(today, local1_ct=0.0, local3_ct=0.0,
                    brent_eur_d1=0.0, brent_eur_d5=0.0,
                    distillate_eur_d1=0.0, distillate_eur_d5=0.0,
-                   eurusd_d5=0.0, news_score=0.0):
+                   eurusd_d5=0.0, news_domestic_supply=0.0,
+                   news_european_imports=0.0,
+                   news_global_crude_shipping=0.0):
     from datetime import date
     brent1_up, brent1_down = split_change(brent_eur_d1, 5.0)
     brent5_up, brent5_down = split_change(brent_eur_d5, 10.0)
@@ -76,7 +82,9 @@ def feature_vector(today, local1_ct=0.0, local3_ct=0.0,
         dist5_up,
         dist5_down,
         clamp(float(eurusd_d5 or 0.0) / 3.0, -2.0, 2.0),
-        clamp(float(news_score or 0.0) / 2.0, -1.5, 1.5),
+        clamp(float(news_domestic_supply or 0.0) / 2.0, -1.5, 1.5),
+        clamp(float(news_european_imports or 0.0) / 2.0, -1.5, 1.5),
+        clamp(float(news_global_crude_shipping or 0.0) / 2.0, -1.5, 1.5),
         math.sin(2*math.pi*weekday/7.0),
         math.cos(2*math.pi*weekday/7.0),
     ]
