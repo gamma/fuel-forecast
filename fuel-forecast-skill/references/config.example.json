@@ -34,7 +34,12 @@
   "market": {
     "brent_symbol": "BZ=F",
     "distillate_symbol": "HO=F",
-    "note": "Yahoo Finance futures JSON is used as keyless numeric source; GPT must cross-check current market direction with reliable web sources."
+    "note": "Heating Oil is a diesel/distillate proxy. For E5/E10, keep this as a broad refinery-cost proxy or add gasoline-specific research topics under news."
+  },
+  "news": {
+    "profile": "diesel_europe",
+    "research_topics": [],
+    "note": "Profiles: diesel_europe, gasoline_europe, custom. See references/fuel-profiles.md for optional channel overrides."
   },
   "widget": {
     "use_current_location": true,

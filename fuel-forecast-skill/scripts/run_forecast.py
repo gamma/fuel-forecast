@@ -68,23 +68,32 @@ def getnum(dct, *path, default=0.0):
     except Exception:
         return default
 
-def news_channel_scores(news):
-    """Split residual news by transmission path to German retail diesel.
-
-    Each event is already age-, novelty-, confidence-, and priced-adjusted by
-    news.py. Domestic supply is closest to German rack/retail pricing;
-    European imports includes Gulf-origin cargo availability and shipping.
-    """
-    channels = {
-        "domestic_supply": 0.0,
-        "european_imports": 0.0,
-        "global_crude_shipping": 0.0,
+def news_channel_scores(news, cfg=None):
+    """Split residual news by configurable fuel transmission paths."""
+    news_cfg = (cfg or {}).get("news", {}) or {}
+    profile = news_cfg.get("profile") or (
+        "diesel_europe" if (cfg or {}).get("fuel", "diesel") == "diesel"
+        else "gasoline_europe"
+    )
+    defaults = {
+        "diesel_europe": {
+            "domestic_supply": {"domestic_refinery", "domestic_distribution", "refinery_outage"},
+            "european_imports": {"european_diesel_imports", "gulf_distillate_shipping", "distillate_supply", "sanctions_export_policy"},
+            "global_crude_shipping": {"opec_policy", "geopolitics_shipping", "inventory_demand", "macro_fx", "market_commentary", "other"},
+        },
+        "gasoline_europe": {
+            "domestic_supply": {"domestic_refinery", "domestic_distribution", "refinery_outage"},
+            "european_imports": {"european_gasoline_imports", "gasoline_blending_supply", "sanctions_export_policy"},
+            "global_crude_shipping": {"opec_policy", "geopolitics_shipping", "inventory_demand", "macro_fx", "market_commentary", "other"},
+        },
     }
+    user_channels = ((cfg or {}).get("news", {}) or {}).get("channels")
+    selected = user_channels if isinstance(user_channels, dict) else defaults.get(profile, defaults["diesel_europe"])
     categories = {
-        "domestic_supply": {"domestic_refinery", "domestic_distribution", "refinery_outage"},
-        "european_imports": {"european_diesel_imports", "gulf_distillate_shipping", "distillate_supply", "sanctions_export_policy"},
-        "global_crude_shipping": {"opec_policy", "geopolitics_shipping", "inventory_demand", "macro_fx", "market_commentary", "other"},
+        channel: {str(value) for value in selected.get(channel, [])}
+        for channel in ("domestic_supply", "european_imports", "global_crude_shipping")
     }
+    channels = {name: 0.0 for name in categories}
     for event in news.get("events", []) if isinstance(news, dict) else []:
         category = str(event.get("category") or "other")
         score = float(event.get("effective_impact", 0.0) or 0.0)
@@ -100,7 +109,7 @@ def news_channel_scores(news):
     return {name: clamp(value, -3.0, 3.0) for name, value in channels.items()}
 
 
-def build_features(ctx, news, obs, bootstrap=None, noon_resets=None):
+def build_features(ctx, news, obs, bootstrap=None, noon_resets=None, cfg=None):
     today = ctx["date"]
     local1, local3 = local_trends(
         obs, today, bootstrap, noon_resets=noon_resets
@@ -121,7 +130,7 @@ def build_features(ctx, news, obs, bootstrap=None, noon_resets=None):
                                       mv("eurusd", "d1_pct"))
     distillate_eur_d5 = converted_pct(mv("distillate", "d5_pct"),
                                       mv("eurusd", "d5_pct"))
-    channels = news_channel_scores(news)
+    channels = news_channel_scores(news, cfg)
     return feature_vector(
         today,
         local1_ct=local1,
@@ -290,7 +299,7 @@ def main():
             still_pending.append(p)
 
     x = build_features(
-        ctx, news, obs, bootstrap, noon_resets=noon_resets
+        ctx, news, obs, bootstrap, noon_resets=noon_resets, cfg=cfg
     )
     _, _, local_trend_source = local_trend_selection(
         obs, ctx["date"], bootstrap=bootstrap, noon_resets=noon_resets
@@ -412,7 +421,10 @@ def main():
         "manual_station_history": manual_place_history,
         "news": {
             "version": news.get("version", 1),
-            "channels": news_channel_scores(news),
+            "channels": news_channel_scores(news, cfg),
+            "profile": ((cfg.get("news", {}) or {}).get("profile") or (
+                "diesel_europe" if cfg.get("fuel", "diesel") == "diesel" else "gasoline_europe"
+            )),
             "net_score": news.get("net_score",0),
             "effective_score": news.get("effective_score", news.get("net_score",0)),
             "confidence": news.get("confidence"),
@@ -456,7 +468,7 @@ def main():
 
 def json_summary(r):
     lines = [
-        f'{r["recommendation_de"]} — Diesel {r["region"]}',
+        f'{r["recommendation_de"]} — {str(r.get("fuel", "Kraftstoff")).upper()} {r["region"]}',
         f'Heute ~ {r["forecast"][0]["price"]:.3f} €/l; bester Tag {r["best_day"]} ({r["best_advantage_ct"]:+.1f} ct).'
     ]
     for x in r["forecast"]:

@@ -9,7 +9,7 @@ metadata:
   compatibility: OpenMinis on iOS or Android with Python 3, network access, and browser/search; Scriptable is optional and iOS-only.
 ---
 
-# Fuel Forecast — Oberkrämer/Oberhavel Diesel
+# Fuel Forecast — configurable German fuel prices
 
 Operate this as a deterministic local forecasting workflow with GPT used for fresh-news interpretation.
 
@@ -60,7 +60,7 @@ When a pre-noon capture is rejected, do not rerun the current live API and do no
 3. Read `morning_context.json`.
 4. Read `references/news-schema.md`.
 5. Read the previous `news_signal.json` when present and reuse stable `event_id` values for the same underlying events. Give a new `update_id` only to a genuinely new development. Carry forward an older event only when it remains materially unresolved; mark it `ongoing` and preserve its original publication timestamp.
-6. Use Minis web/browser search to research the last 48 hours of oil, middle-distillate/diesel, German refinery and distribution constraints, European diesel-import flows, Gulf diesel/gasoil exports and Hormuz/Red-Sea cargo logistics, refinery, sanctions, shipping, OPEC+, inventory, and EUR/USD-relevant developments. Capture exact publication timestamps with timezone.
+6. Use Minis web/browser search to research the last 48 hours according to `morning_context.json`'s `fuel`, `news_profile`, and `news_research_topics`. Always cover domestic refinery/distribution, European imports or blending supply, crude/refinery, sanctions, shipping, OPEC+, inventory, and EUR/USD developments. For `diesel_europe`, additionally cover middle-distillate/diesel, Gulf diesel/gasoil exports and Hormuz/Red-Sea cargo logistics. For `gasoline_europe`, additionally cover gasoline/blending components, refinery gasoline yields and relevant gasoline inventory data. Capture exact publication timestamps with timezone.
 7. Treat news as a **residual shock**, not a second copy of price moves already visible in futures. Prioritize Reuters and primary sources.
 8. Write strict valid schema-v2 JSON to `/var/minis/mounts/FuelForecast/memory/news_signal_draft.json`.
 9. Run:
@@ -73,13 +73,13 @@ When a pre-noon capture is rejected, do not rerun the current live API and do no
    ```
 11. Read `forecast.json` and report briefly in German:
    - TANKEN HEUTE / WARTEN / NEUTRAL
-   - today + next four dates with expected pre-12:00 diesel price
+   - today + next four dates with expected pre-12:00 configured-fuel price
    - best day and expected advantage in ct/l
    - Germendorf / Hohen Neuendorf when available
    - top 2–4 market/news drivers
    - confidence/model sample count
    - append today's forecast revision in ct inline when `revision_ct` is available; omit future-day revisions and do not add a separate revision section
-12. Send a native notification with title `Diesel-Prognose OHV` and body containing the recommendation, best day, and expected advantage.
+12. Send a native notification titled `Sprit-Prognose` with the configured fuel, recommendation, best day, and expected advantage.
 
 ## Learning behavior
 
@@ -92,7 +92,7 @@ The reset model learns only leakage-safe pairs `noon_reset(D) -> pre_noon_observ
 The system starts with conservative heuristic weights. It becomes genuinely personalized after accumulating daily observations.
 If authorized historical Tankerkönig CSV access is available, bootstrap with `import_tankerkoenig_history.py`; realtime API calls must not be abused for historical mass collection.
 
-The model keeps residual news in three channels: domestic German supply/distribution, European diesel-import availability (including Gulf-origin cargoes and their shipping route), and broad crude/global shipping. European import shocks receive the largest initial diesel-specific prior, while later real 11:50 observations adapt all weights. Do not double count moves already visible in EUR-adjusted distillate futures.
+The model keeps residual news in three configurable channels: domestic supply/distribution, European fuel-import or blending-component availability, and broad crude/global shipping. `references/fuel-profiles.md` defines diesel and gasoline defaults plus custom overrides. Later real 11:50 observations adapt all weights. Do not double count moves already visible in EUR-adjusted market proxies.
 
 ## Historical bootstrap
 
@@ -141,6 +141,10 @@ Read `references/ablation-testing.md`. Historical news remains zero because no l
 ## Current prices
 
 Tankerkönig/MTS-K is the primary source for local live fuel prices. Do not replace it with scraped fuel-price websites when the API is available.
+
+## Fuel and news configuration
+
+Tankerkönig supports `diesel`, `e5`, and `e10`; set `fuel` in the active configuration. Keep one `memory/` folder per fuel because observations and models are not interchangeable. The optional `news` section controls the comprehensive research and news-to-model mapping: use `diesel_europe`, `gasoline_europe`, or a fully explicit `custom` channel map and `research_topics`. See [references/fuel-profiles.md](references/fuel-profiles.md).
 
 ## Market values
 

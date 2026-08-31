@@ -11,6 +11,7 @@ No code changes are required for a new area:
 - location or exact coordinates;
 - search radius and a friendly region name;
 - fuel type (`diesel`, `e5`, or `e10`, subject to Tankerkönig support);
+- a diesel, gasoline, or fully custom news profile;
 - your own Tankerkönig API key;
 - optional local place labels and forecast thresholds.
 
@@ -76,7 +77,7 @@ The 12:20 data stays separate from the 11:50 learning target. Read the in-skill 
 
 - **Local ground truth:** Tankerkönig/MTS-K; target is the median of the five cheapest open stations in the configured area.
 - **Markets:** Brent, a heating-oil/middle-distillate proxy and ECB EUR/USD rates.
-- **News:** time-stamped, auditable events are discounted for age, repetition and effects already present in futures. The model distinguishes domestic supply, European diesel imports (including Gulf-origin cargoes) and broad crude/shipping news.
+- **News:** time-stamped, auditable events are discounted for age, repetition and effects already present in futures. Choose `news.profile` as `diesel_europe`, `gasoline_europe`, or `custom`; optional `news.research_topics` and `news.channels` make the research scope and the three model channels explicitly configurable. Diesel defaults distinguish domestic supply, European diesel imports (including Gulf-origin cargoes) and broad crude/shipping news. See `fuel-forecast-skill/references/fuel-profiles.md`.
 - **No fabricated data:** an individual manually reported station price can improve only that local place after matching a true regional observation; it is never silently promoted to the regional training target.
 
 ## Project layout

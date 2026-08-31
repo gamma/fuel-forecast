@@ -36,6 +36,10 @@ def main():
         "date": now.date().isoformat(),
         "generated_at": now.isoformat(),
         "fuel": cfg.get("fuel","diesel"),
+        "news_profile": (cfg.get("news", {}) or {}).get(
+            "profile", "diesel_europe" if cfg.get("fuel", "diesel") == "diesel" else "gasoline_europe"
+        ),
+        "news_research_topics": (cfg.get("news", {}) or {}).get("research_topics", []),
         "region": cfg["region"]["name"],
         "local": local,
         "market": market,
