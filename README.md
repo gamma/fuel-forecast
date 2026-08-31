@@ -1,6 +1,10 @@
 # FuelForecast
 
-A self-hosted, local diesel-price forecast for Germany. It combines a single daily [Tankerkönig/MTS-K](https://creativecommons.tankerkoenig.de/) regional price snapshot, EUR-adjusted energy-market inputs and an auditable, residual news signal. It runs inside [Open Minis](https://openminis.app/); iOS users can optionally use the included Scriptable widget.
+A self-hosted, **regionally configurable** fuel-price forecast for Germany. It combines a single daily [Tankerkönig/MTS-K](https://creativecommons.tankerkoenig.de/) regional price snapshot, EUR-adjusted energy-market inputs and an auditable, residual news signal. It runs inside [Open Minis](https://openminis.app/); iOS users can optionally use the included Scriptable widget.
+
+![Illustrated FuelForecast example: configurable regional fuel forecast](docs/images/fuel-forecast-overview.svg)
+
+> The visual above is an illustration, not a real price forecast or a screenshot containing personal data.
 
 > **Experimental personal decision aid — not financial advice.** A forecast is uncertain, especially before enough local 11:50 observations have accumulated.
 

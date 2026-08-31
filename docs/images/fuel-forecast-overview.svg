@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">FuelForecast Beispielansicht</title><desc id="desc">Beispiel eines regional konfigurierbaren Kraftstoff-Forecasts mit lokaler Preisreferenz, Empfehlung und Fünf-Tage-Ausblick.</desc>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0a192f"/><stop offset="1" stop-color="#173b4d"/></linearGradient></defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1050" cy="80" r="230" fill="#1f6f78" opacity=".25"/><circle cx="90" cy="610" r="260" fill="#159e85" opacity=".18"/>
+  <text x="80" y="120" font-family="Arial, sans-serif" font-size="46" font-weight="700" fill="white">FuelForecast</text>
+  <text x="82" y="165" font-family="Arial, sans-serif" font-size="23" fill="#b9d4d9">Regional konfigurierbare Kraftstoffprognose</text>
+  <rect x="720" y="58" width="390" height="510" rx="34" fill="#f8fbfc"/>
+  <rect x="742" y="81" width="346" height="46" rx="16" fill="#e7f3f2"/>
+  <text x="764" y="112" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#183742">Sprit · Meine Region</text>
+  <text x="1011" y="112" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="#007a6d">WARTEN</text>
+  <text x="762" y="170" font-family="Arial, sans-serif" font-size="15" fill="#647881">Günstigste Station in deiner Nähe</text>
+  <text x="762" y="217" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#142b35">1,689 €</text>
+  <text x="944" y="211" font-family="Arial, sans-serif" font-size="14" fill="#647881">Beispielwert</text>
+  <line x1="762" x2="1067" y1="246" y2="246" stroke="#d9e5e7"/>
+  <text x="762" y="278" font-family="Arial, sans-serif" font-size="15" fill="#647881">Ab morgen · erwartete Preise</text>
+  <g font-family="Arial, sans-serif" text-anchor="middle"><text x="792" y="323" font-size="14" fill="#647881">Mo</text><text x="860" y="323" font-size="14" fill="#647881">Di</text><text x="928" y="323" font-size="14" fill="#647881">Mi</text><text x="996" y="323" font-size="14" fill="#647881">Do</text><text x="1060" y="323" font-size="14" fill="#647881">Fr</text><text x="792" y="354" font-size="16" font-weight="700" fill="#183742">1,68</text><text x="860" y="354" font-size="16" font-weight="700" fill="#183742">1,67</text><text x="928" y="354" font-size="16" font-weight="700" fill="#007a6d">1,65</text><text x="996" y="354" font-size="16" font-weight="700" fill="#007a6d">1,64</text><text x="1060" y="354" font-size="16" font-weight="700" fill="#007a6d">1,64</text></g>
+  <rect x="762" y="393" width="305" height="104" rx="16" fill="#e9f7f3"/>
+  <text x="784" y="425" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#00685c">Prognose statt Versprechen</text><text x="784" y="453" font-family="Arial, sans-serif" font-size="14" fill="#31545a">Lokale Preise, Märkte und</text><text x="784" y="474" font-family="Arial, sans-serif" font-size="14" fill="#31545a">nachvollziehbare News-Signale.</text>
+  <text x="80" y="250" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="white">Dein Ort. Dein Kraftstoff. Dein Modell.</text>
+  <g font-family="Arial, sans-serif" font-size="20" fill="#d5e7e9"><text x="86" y="310">✓ Diesel, E5 oder E10 konfigurieren</text><text x="86" y="355">✓ Lokale Tankerkönig-Daten als Lernziel</text><text x="86" y="400">✓ Anpassbare News-Profile und Quellen</text><text x="86" y="445">✓ Private Daten bleiben im memory-Ordner</text></g>
+  <text x="82" y="544" font-family="Arial, sans-serif" font-size="16" fill="#91b6bb">Beispiel-Visualisierung · keine reale Preisprognose</text>
+</svg>
