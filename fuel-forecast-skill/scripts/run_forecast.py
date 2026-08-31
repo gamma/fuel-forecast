@@ -371,6 +371,7 @@ def main():
         action_de = "NEUTRAL"
 
     places = {}
+    preferred_station_advice = {}
     manual_place_history = {}
     for z in cfg["region"].get("preferred_places",[]):
         off = zone_offset(obs_rows, z)
@@ -405,6 +406,30 @@ def main():
             ] if off is not None else []
         }
 
+        place_live = ctx.get("local", {}).get("places", {}).get(z, {}).get("best")
+        place_today = places[z]["forecast"][0]["price"] if places[z]["forecast"] else None
+        expected_drop_ct = (
+            round((place_live - place_today) * 100.0, 1)
+            if place_live is not None and place_today is not None else None
+        )
+        if place_live is None:
+            decision, reason = "KEINE LIVE-DATEN", "Für diesen bevorzugten Ort wurde keine offene Station gefunden."
+        elif expected_drop_ct is not None and expected_drop_ct >= 2.0:
+            decision, reason = "BIS 11:50 WARTEN", f"Erwartet etwa {expected_drop_ct:.1f} ct/l niedriger als der aktuelle Orts-Livepreis."
+        else:
+            decision, reason = "JETZT TANKEN", (
+                "Bis 11:50 ist kein ausreichend großer Preisrückgang (mindestens 2 ct/l) zu erwarten."
+            )
+        preferred_station_advice[z] = {
+            "recommendation": decision,
+            "live_price": place_live,
+            "expected_pre_noon_price": place_today,
+            "expected_drop_ct": expected_drop_ct,
+            "threshold_ct": 2.0,
+            "reason": reason,
+            "caveat": "Gilt nur, wenn Tanken heute nötig ist und der Ort auf deiner ohnehin gefahrenen Strecke liegt.",
+        }
+
     result = {
         "version": 1,
         "generated_at": ctx["generated_at"],
@@ -418,6 +443,7 @@ def main():
         "forecast": forecasts,
         "local_live": ctx.get("local",{}),
         "places": places,
+        "preferred_station_advice": preferred_station_advice,
         "manual_station_history": manual_place_history,
         "news": {
             "version": news.get("version", 1),
@@ -475,6 +501,14 @@ def json_summary(r):
         revision = x.get("revision_ct") if x.get("horizon") == 0 else None
         revision_text = f', Revision {revision:+.1f} ct' if revision is not None else ''
         lines.append(f'{x["date"]}: {x["price"]:.3f} €/l ({x["delta_ct"]:+.1f} ct{revision_text}, conf {x["confidence"]:.0%})')
+    for place, advice in r.get("preferred_station_advice", {}).items():
+        live = advice.get("live_price")
+        expected = advice.get("expected_pre_noon_price")
+        price_text = (
+            f'jetzt {live:.3f} €/l, 11:50 ~ {expected:.3f} €/l'
+            if live is not None and expected is not None else "keine vollständigen Ortsdaten"
+        )
+        lines.append(f'{place}: {advice["recommendation"]} — {price_text}. {advice["reason"]}')
     if r["news"].get("summary"):
         lines.append("News: " + str(r["news"]["summary"]))
     return "\n".join(lines)
