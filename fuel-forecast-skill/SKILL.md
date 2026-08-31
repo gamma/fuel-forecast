@@ -5,13 +5,23 @@ description: >
   Use for Dieselpreis, Tanken, Tankerkönig, Spritpreis-Prognose, Germendorf, Hohen Neuendorf,
   oil-price/news effects, daily fuel forecast, a scheduled morning task, or the 11:50/12:20 learning captures.
 metadata:
-  version: 1.8.0
+  version: 1.9.0
   compatibility: OpenMinis on iOS or Android with Python 3, network access, and browser/search; Scriptable is optional and iOS-only.
 ---
 
 # Fuel Forecast — Oberkrämer/Oberhavel Diesel
 
 Operate this as a deterministic local forecasting workflow with GPT used for fresh-news interpretation.
+
+## Setup — configurable for any German region
+
+The active configuration is always `memory/config.json`; never put an API key into `references/config.example.json`. Run the interactive setup helper after importing the skill:
+
+```sh
+python3 /var/minis/skills/fuel-forecast/scripts/configure.py
+```
+
+It asks for a German town/address, resolves coordinates, and securely writes a local configuration. Advanced users may instead copy the template and edit `fuel`, `region.center`, `region.radius_km`, `region.preferred_places`, capture windows, and thresholds. Each installation uses its own Tankerkönig key and local `memory` folder.
 
 ## Data paths
 

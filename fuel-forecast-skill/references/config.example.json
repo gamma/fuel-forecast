@@ -3,18 +3,16 @@
   "fuel": "diesel",
   "tankerkoenig_api_key": "PASTE_YOUR_TANKERKOENIG_API_KEY_HERE",
   "region": {
-    "name": "Oberkrämer / Oberhavel",
+    "name": "Berlin (Beispiel — bei Einrichtung ersetzen)",
     "timezone": "Europe/Berlin",
     "center": {
-      "lat": 52.69545,
-      "lng": 13.11067
+      "lat": 52.52,
+      "lng": 13.405
     },
     "radius_km": 25,
     "target_time": "11:50",
     "preferred_places": [
-      "Germendorf",
-      "Hohen Neuendorf",
-      "Oberkrämer"
+      "Berlin (Beispiel — bei Einrichtung ersetzen)"
     ]
   },
   "capture": {
