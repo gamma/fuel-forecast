@@ -12,7 +12,7 @@ from capture_observation import build_observation, replace_daily_observation
 from quarantine_observation import quarantine_observation
 
 
-def station(price, place="Oberkrämer", is_open=True):
+def station(price, place="Exampletown", is_open=True):
     return {
         "id": str(price),
         "name": "Test",
@@ -25,7 +25,7 @@ def station(price, place="Oberkrämer", is_open=True):
 def test_capture_is_idempotent_per_day(tmp_path):
     cfg = {
         "fuel": "diesel",
-        "region": {"preferred_places": ["Oberkrämer"]},
+        "region": {"preferred_places": ["Exampletown"]},
     }
     captured_at = datetime(2026, 8, 28, 11, 50, tzinfo=timezone.utc)
     first = build_observation(cfg, [station(1.70), station(1.72)], captured_at)

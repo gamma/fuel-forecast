@@ -1,9 +1,9 @@
 ---
 name: fuel-forecast
 description: >
-  Predict whether to refuel diesel today or wait 1–4 days around Oberkrämer/Oberhavel.
-  Use for Dieselpreis, Tanken, Tankerkönig, Spritpreis-Prognose, Germendorf, Hohen Neuendorf,
-  oil-price/news effects, daily fuel forecast, a scheduled morning task, or the 11:50/12:20 learning captures.
+  Predict whether to refuel diesel, E5, or E10 today or wait 1–4 days for a configured German region.
+  Use for fuel prices, refueling, Tankerkönig, Spritpreis-Prognose, regional fuel forecasts,
+  oil/news effects, daily forecast tasks, or the 11:50/12:20 learning captures.
 metadata:
   version: 1.9.0
   compatibility: OpenMinis on iOS or Android with Python 3, network access, and browser/search; Scriptable is optional and iOS-only.
@@ -75,7 +75,7 @@ When a pre-noon capture is rejected, do not rerun the current live API and do no
    - TANKEN HEUTE / WARTEN / NEUTRAL
    - today + next four dates with expected pre-12:00 configured-fuel price
    - best day and expected advantage in ct/l
-   - Germendorf / Hohen Neuendorf when available
+   - configured preferred places when available
    - top 2–4 market/news drivers
    - confidence/model sample count
    - append today's forecast revision in ct inline when `revision_ct` is available; omit future-day revisions and do not add a separate revision section
